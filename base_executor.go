@@ -1,6 +1,9 @@
 package main
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"github.com/hootsuite/atlantis/locking"
+)
 
 type BaseExecutor struct {
 	github                *GithubClient
@@ -12,6 +15,7 @@ type BaseExecutor struct {
 	ghComments            *GithubCommentRenderer
 	terraform             *TerraformClient
 	githubCommentRenderer *GithubCommentRenderer
+	runLock               locking.LockManager
 }
 
 type PullRequestContext struct {

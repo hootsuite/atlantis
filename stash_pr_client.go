@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/hootsuite/atlantis/logging"
 )
 

@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/urfave/cli"
+	"github.com/boltdb/bolt"
+	"time"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -24,13 +26,14 @@ const (
 	version              = "2.0.0"
 	configFileFlag       = "config-file"
 	requireApprovalFlag  = "require-approval"
-
+	atlantisURLFlag = "atlantis-url"
 	defaultGHHostname = "github.com"
-	defaultPort       = 4141
+	defaultPort = 4141
 	defaultScratchDir = "/tmp/atlantis"
-	defaultRegion     = "us-east-1"
-	defaultS3Bucket   = "atlantis"
-	defaultLogLevel   = "info"
+	defaultRegion = "us-east-1"
+	defaultS3Bucket = "atlantis"
+	defaultLogLevel = "info"
+	boltDBRunLocksBucket = "runLocks"
 )
 
 type AtlantisConfig struct {
@@ -44,6 +47,7 @@ type AtlantisConfig struct {
 	AWSRegion        *string                 `json:"aws-region"`
 	S3Bucket         *string                 `json:"s3-bucket"`
 	LogLevel         *string                 `json:"log-level"`
+	AtlantisURL      *string                 `json:"atlantis-url"`
 	RequireApproval  bool                    `json:"require-approval"`
 }
 
@@ -54,13 +58,26 @@ func main() {
 	app.Run(os.Args)
 }
 
-// mainAction is the only "action" for this cli program. It starts the web server
+// mainAction is the only "action" for this cli program. It starts the web server and initializes the bolt db
 func mainAction(c *cli.Context) error {
-	conf, err := validateConfig(c)
+	hostname, err := os.Hostname()
+	if err != nil {
+		return cli.NewExitError(fmt.Errorf("Failed to determine hostname: %v", err), 1)
+	}
+	conf, err := validateConfig(c, hostname)
 	if err != nil {
 		return cli.NewExitError(err.Error(), 1)
 	}
-	return NewServer(conf).Start()
+	// todo: if using s3 for locking don't need this, make optional
+	db, err := bolt.Open("atlantis.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		return cli.NewExitError(fmt.Errorf("Failed to start Bolt DB: %v", err), 1)
+	}
+	if err = initDB(db); err != nil {
+		return cli.NewExitError(fmt.Errorf("Failed to initialize Bolt DB: %v", err), 1)
+	}
+	defer db.Close()
+	return NewServer(conf, db).Start()
 }
 
 // configureCli sets up the flags, name of the cli, etc.
@@ -112,6 +129,10 @@ func configureCli(app *cli.App) {
 			Value: defaultS3Bucket,
 			Usage: "The S3 bucket name to store atlantis data (terraform plans, terraform state, etc.)",
 		},
+		cli.StringFlag{
+			Name:  atlantisURLFlag,
+			Usage: "The url that Atlantis can be reached at. Defaults to http, hostname, and configured port",
+		},
 		cli.BoolFlag{
 			Name:  requireApprovalFlag,
 			Usage: "Require pull requests to be \"Approved\" before allowing the apply command to be run",
@@ -139,7 +160,7 @@ version: {{.Version}}{{end}}
 `
 }
 
-func validateConfig(c *cli.Context) (*ServerConfig, error) {
+func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 	// set defaults for non-required flags if not specified
 	port := defaultPort
 	ghHostname := defaultGHHostname
@@ -152,6 +173,7 @@ func validateConfig(c *cli.Context) (*ServerConfig, error) {
 	sshKey := ""
 	assumeRole := ""
 	requireApproval := false
+	atlantisURL := ""
 
 	// check if config file flag is set
 	if c.IsSet(configFileFlag) {
@@ -197,6 +219,9 @@ func validateConfig(c *cli.Context) (*ServerConfig, error) {
 		if config.AssumeRole != nil {
 			assumeRole = *config.AssumeRole
 		}
+		if config.AtlantisURL != nil {
+			atlantisURL = *config.AtlantisURL
+		}
 		requireApproval = config.RequireApproval
 	}
 
@@ -241,7 +266,11 @@ func validateConfig(c *cli.Context) (*ServerConfig, error) {
 	if c.IsSet(requireApprovalFlag) {
 		requireApproval = c.Bool(requireApprovalFlag)
 	}
-
+	if c.IsSet(atlantisURLFlag) {
+		atlantisURL = c.String(atlantisURLFlag)
+	} else if atlantisURL == "" {
+		atlantisURL = fmt.Sprintf("http://%s:%d", hostname, port)
+	}
 	if logLevel != "debug" && logLevel != "info" && logLevel != "warn" && logLevel != "error" {
 		return nil, errors.New("Invalid log level")
 	}
@@ -257,6 +286,16 @@ func validateConfig(c *cli.Context) (*ServerConfig, error) {
 		awsRegion:        awsRegion,
 		s3Bucket:         s3Bucket,
 		logLevel:         logLevel,
+		atlantisURL:      atlantisURL,
 		requireApproval:  requireApproval,
 	}, nil
+}
+
+func initDB(db *bolt.DB) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists([]byte(boltDBRunLocksBucket)); err != nil {
+			return errors.Wrap(err, "failed to create bucket")
+		}
+		return nil
+	})
 }

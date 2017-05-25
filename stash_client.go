@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-
 	"github.com/hootsuite/atlantis/logging"
 )
 
