@@ -142,11 +142,7 @@ tbody {
     -webkit-filter: drop-shadow(0 0 6px rgba(0,0,0,.1));
        -moz-filter: drop-shadow(0 0 6px rgba(0,0,0,.1));
             filter: drop-shadow(0 0 6px rgba(0,0,0,.1)); }
-<<<<<<< HEAD
   .popover-item:first-child .popover-link:after,
-=======
-  .popover-item:first-child .popover-link:after,
->>>>>>> origin/master
   .popover-item:first-child .popover-link:before {
     bottom: 100%;
     left: 50%;
