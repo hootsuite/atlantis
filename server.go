@@ -56,6 +56,7 @@ type ServerConfig struct {
 	logLevel         string
 	atlantisURL      string
 	requireApproval  bool
+	dataDir          string
 }
 
 type ExecutionContext struct {

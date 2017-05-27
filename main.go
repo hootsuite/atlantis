@@ -10,9 +10,11 @@ import (
 	"github.com/boltdb/bolt"
 	"time"
 	"github.com/pkg/errors"
+	"path"
 )
 
 const (
+	// flags
 	ghUsernameFlag       = "gh-username"
 	ghPasswordFlag       = "gh-password"
 	ghHostnameFlag       = "gh-hostname"
@@ -23,17 +25,21 @@ const (
 	awsRegionFlag        = "aws-region"
 	s3BucketFlag         = "s3-bucket"
 	logLevelFlag         = "log-level"
-	version              = "2.0.0"
 	configFileFlag       = "config-file"
 	requireApprovalFlag  = "require-approval"
 	atlantisURLFlag = "atlantis-url"
+	dataDirFlag = "data-dir"
+
+	// defaults
+	boltDBRunLocksBucket = "runLocks"
+	version              = "2.0.0"
 	defaultGHHostname = "github.com"
 	defaultPort = 4141
 	defaultScratchDir = "/tmp/atlantis"
 	defaultRegion = "us-east-1"
 	defaultS3Bucket = "atlantis"
 	defaultLogLevel = "info"
-	boltDBRunLocksBucket = "runLocks"
+	defaultDataDir = "/var/lib/atlantis"
 )
 
 type AtlantisConfig struct {
@@ -49,6 +55,12 @@ type AtlantisConfig struct {
 	LogLevel         *string                 `json:"log-level"`
 	AtlantisURL      *string                 `json:"atlantis-url"`
 	RequireApproval  bool                    `json:"require-approval"`
+	DataDir          *string                 `json:"data-dir"`
+	Locking          LockingConfig           `json:"locking"`
+}
+
+type LockingConfig struct {
+	Backend *string `json:"backend"`
 }
 
 func main() {
@@ -69,7 +81,10 @@ func mainAction(c *cli.Context) error {
 		return cli.NewExitError(err.Error(), 1)
 	}
 	// todo: if using s3 for locking don't need this, make optional
-	db, err := bolt.Open("atlantis.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err := os.MkdirAll(conf.dataDir, 0755); err != nil {
+		return cli.NewExitError(fmt.Errorf("Failed to create data dir: %v", err), 1)
+	}
+	db, err := bolt.Open(path.Join(conf.dataDir, "atlantis.db"), 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return cli.NewExitError(fmt.Errorf("Failed to start Bolt DB: %v", err), 1)
 	}
@@ -146,6 +161,10 @@ func configureCli(app *cli.App) {
 			Name:  configFileFlag,
 			Usage: "Load configuration from `file`",
 		},
+		cli.StringFlag{
+			Name: dataDirFlag,
+			Usage: "Directory to store Atlantis data",
+		},
 		// todo: allow option of where to log
 		// todo: network interface to bind to? by default localhost
 	}
@@ -174,6 +193,7 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 	assumeRole := ""
 	requireApproval := false
 	atlantisURL := ""
+	dataDir := defaultDataDir
 
 	// check if config file flag is set
 	if c.IsSet(configFileFlag) {
@@ -221,6 +241,9 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 		}
 		if config.AtlantisURL != nil {
 			atlantisURL = *config.AtlantisURL
+		}
+		if config.DataDir != nil {
+			dataDir = *config.DataDir
 		}
 		requireApproval = config.RequireApproval
 	}
@@ -274,6 +297,9 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 	if logLevel != "debug" && logLevel != "info" && logLevel != "warn" && logLevel != "error" {
 		return nil, errors.New("Invalid log level")
 	}
+	if c.IsSet(dataDirFlag) {
+		dataDir = c.String(dataDirFlag)
+	}
 
 	return &ServerConfig{
 		githubUsername:   ghUsername,
@@ -288,6 +314,7 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 		logLevel:         logLevel,
 		atlantisURL:      atlantisURL,
 		requireApproval:  requireApproval,
+		dataDir:          dataDir,
 	}, nil
 }
 

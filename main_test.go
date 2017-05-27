@@ -26,6 +26,7 @@ var baseConfig *AtlantisConfig = &AtlantisConfig{
 	LogLevel:       stringPtr("info"),
 	AtlantisURL:   stringPtr("http://test-atlantis-url"),
 	RequireApproval: false,
+	DataDir: stringPtr("/datadir"),
 }
 
 func TestValidateConfig_missing_config_file_should_error(t *testing.T) {
@@ -64,6 +65,7 @@ func TestValidateConfig_should_use_defaults(t *testing.T) {
 	Equals(t, "", conf.sshKey)
 	Equals(t, "", conf.awsAssumeRole)
 	Equals(t, fmt.Sprintf("http://hostname:%d", defaultPort), conf.atlantisURL)
+	Equals(t, defaultDataDir, conf.dataDir)
 }
 
 func TestValidateConfig_config_file_should_work(t *testing.T) {
@@ -86,6 +88,7 @@ func TestValidateConfig_config_file_should_work(t *testing.T) {
 	Equals(t, "info", conf.logLevel)
 	Equals(t, "http://test-atlantis-url", conf.atlantisURL)
 	Equals(t, false, conf.requireApproval)
+	Equals(t, "/datadir", conf.dataDir)
 }
 
 func TestValidateConfig_flags_should_work(t *testing.T) {
@@ -102,6 +105,7 @@ func TestValidateConfig_flags_should_work(t *testing.T) {
 	Ok(t, ctx.Set(logLevelFlag, "debug"))
 	Ok(t, ctx.Set(atlantisURLFlag, "http://new-atlantis-url"))
 	Ok(t, ctx.Set(requireApprovalFlag, "true"))
+	Ok(t, ctx.Set(dataDirFlag, "/new/dir"))
 
 	conf, err := validateConfig(ctx, hostname)
 	Ok(t, err)
@@ -117,6 +121,7 @@ func TestValidateConfig_flags_should_work(t *testing.T) {
 	Equals(t, "debug", conf.logLevel)
 	Equals(t, "http://new-atlantis-url", conf.atlantisURL)
 	Equals(t, true, conf.requireApproval)
+	Equals(t, "/new/dir", conf.dataDir)
 }
 
 func TestValidateConfig_flags_should_override_config_file(t *testing.T) {
@@ -139,6 +144,7 @@ func TestValidateConfig_flags_should_override_config_file(t *testing.T) {
 	Ok(t, ctx.Set(logLevelFlag, "debug"))
 	Ok(t, ctx.Set(atlantisURLFlag, "overridden-url"))
 	Ok(t, ctx.Set(requireApprovalFlag, "true"))
+	Ok(t, ctx.Set(dataDirFlag, "/overridden/dir"))
 
 	conf, err := validateConfig(ctx, hostname)
 	Ok(t, err)
@@ -154,6 +160,7 @@ func TestValidateConfig_flags_should_override_config_file(t *testing.T) {
 	Equals(t, "debug", conf.logLevel)
 	Equals(t, "overridden-url", conf.atlantisURL)
 	Equals(t, true, conf.requireApproval)
+	Equals(t, "/overridden/dir", conf.dataDir)
 }
 
 func TestValidateConfig_missing_required_flags_should_error(t *testing.T) {
