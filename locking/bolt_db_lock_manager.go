@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"encoding/json"
 	"github.com/pkg/errors"
-	"crypto/sha256"
 	"encoding/hex"
 )
 
@@ -25,7 +24,7 @@ func (b BoltDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 		return response, errors.Wrap(err, "failed to serialize run")
 	}
 
-	lockId := b.runHash(run)
+	lockId := run.StateKey()
 	transactionErr := b.db.Update(func(tx *bolt.Tx) error {
 		locksBucket := tx.Bucket(b.locksBucket)
 
@@ -61,14 +60,14 @@ func (b BoltDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	return response, nil
 }
 
-func (b BoltDBLockManager) Unlock(runKey string) error {
-	keyAsHex, err := hex.DecodeString(runKey)
+func (b BoltDBLockManager) Unlock(lockID string) error {
+	idAsHex, err := hex.DecodeString(lockID)
 	if err != nil {
-		return errors.Wrap(err, "key was not in correct format")
+		return errors.Wrap(err, "id was not in correct format")
 	}
 	err = b.db.Update(func(tx *bolt.Tx) error {
 		locks := tx.Bucket(b.locksBucket)
-		return locks.Delete(keyAsHex)
+		return locks.Delete(idAsHex)
 	})
 	return errors.Wrap(err, "db transaction failed")
 }
@@ -99,12 +98,6 @@ func (b BoltDBLockManager) ListLocks() (map[string]Run, error) {
 	}
 
 	return m, nil
-}
-
-func (b BoltDBLockManager) runHash(run Run) []byte {
-	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%s/%s/%s/%s", run.RepoOwner, run.RepoName, run.Path, run.Env)))
-	return h.Sum(nil)
 }
 
 func (b BoltDBLockManager) lockIDToString(key []byte) string {

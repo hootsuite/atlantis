@@ -177,7 +177,7 @@ func (a *ApplyExecutor) apply(ctx *ExecutionContext, stashCtx *StashPullRequestC
 			Timestamp: time.Now(),
 		}
 
-		lockAttempt, err := a.runLock.TryLock(run)
+		lockAttempt, err := a.lockManager.TryLock(run)
 		if err != nil {
 			return PathResult{
 				Status: "error",

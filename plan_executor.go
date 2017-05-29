@@ -229,7 +229,7 @@ func (p *PlanExecutor) plan(log *logging.SimpleLogger,
 			}
 		}
 	}
-	lockAttempt, err := p.runLock.TryLock(run)
+	lockAttempt, err := p.lockManager.TryLock(run)
 	if err != nil {
 		return PathResult{
 			Status:" failure",
@@ -303,7 +303,7 @@ func (p *PlanExecutor) plan(log *logging.SimpleLogger,
 		}
 		log.Err("error running terraform plan: %v", output)
 		log.Info("unlocking state since plan failed")
-		if err := p.runLock.Unlock(lockAttempt.LockID); err != nil {
+		if err := p.lockManager.Unlock(lockAttempt.LockID); err != nil {
 			log.Err("error unlocking state: %v", err)
 		}
 		return PathResult{
@@ -316,7 +316,7 @@ func (p *PlanExecutor) plan(log *logging.SimpleLogger,
 	if err := UploadPlanFile(s3Client, s3Key, tfPlanOutputPath); err != nil {
 		err = fmt.Errorf("failed to upload to S3: %v", err)
 		log.Err(err.Error())
-		if err := p.runLock.Unlock(lockAttempt.LockID); err != nil {
+		if err := p.lockManager.Unlock(lockAttempt.LockID); err != nil {
 			log.Err("error unlocking state: %v", err)
 		}
 		return PathResult{

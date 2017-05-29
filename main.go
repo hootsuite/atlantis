@@ -16,30 +16,36 @@ import (
 const (
 	// flags
 	ghUsernameFlag       = "gh-username"
-	ghPasswordFlag       = "gh-password"
-	ghHostnameFlag       = "gh-hostname"
-	sshKeyFlag           = "ssh-key"
-	portFlag             = "port"
-	awsAssumeRoleFlag    = "aws-assume-role-arn"
-	scratchDirFlag       = "scratch-dir"
-	awsRegionFlag        = "aws-region"
-	s3BucketFlag         = "s3-bucket"
-	logLevelFlag         = "log-level"
-	configFileFlag       = "config-file"
-	requireApprovalFlag  = "require-approval"
-	atlantisURLFlag = "atlantis-url"
-	dataDirFlag = "data-dir"
+	ghPasswordFlag      = "gh-password"
+	ghHostnameFlag      = "gh-hostname"
+	sshKeyFlag          = "ssh-key"
+	portFlag            = "port"
+	awsAssumeRoleFlag   = "aws-assume-role-arn"
+	scratchDirFlag      = "scratch-dir"
+	awsRegionFlag       = "aws-region"
+	s3BucketFlag        = "s3-bucket"
+	logLevelFlag        = "log-level"
+	configFileFlag      = "config-file"
+	requireApprovalFlag = "require-approval"
+	atlantisURLFlag     = "atlantis-url"
+	dataDirFlag         = "data-dir"
+	lockingBackendFlag  = "locking-backend"
+	lockingTableFlag    = "locking-table"
 
 	// defaults
-	boltDBRunLocksBucket = "runLocks"
-	version              = "2.0.0"
-	defaultGHHostname = "github.com"
-	defaultPort = 4141
-	defaultScratchDir = "/tmp/atlantis"
-	defaultRegion = "us-east-1"
-	defaultS3Bucket = "atlantis"
-	defaultLogLevel = "info"
-	defaultDataDir = "/var/lib/atlantis"
+	boltDBRunLocksBucket   = "runLocks"
+	version                = "2.0.0"
+	defaultGHHostname      = "github.com"
+	defaultPort            = 4141
+	defaultScratchDir      = "/tmp/atlantis"
+	defaultRegion          = "us-east-1"
+	defaultS3Bucket        = "atlantis"
+	defaultLogLevel        = "info"
+	defaultDataDir         = "/var/lib/atlantis"
+	fileLockingBackend     = "file"
+	dynamoDBLockingBackend = "dynamodb"
+	defaultLockingBackend  = fileLockingBackend
+	defaultLockingTable    = "atlantis-locks"
 )
 
 type AtlantisConfig struct {
@@ -56,11 +62,8 @@ type AtlantisConfig struct {
 	AtlantisURL      *string                 `json:"atlantis-url"`
 	RequireApproval  bool                    `json:"require-approval"`
 	DataDir          *string                 `json:"data-dir"`
-	Locking          LockingConfig           `json:"locking"`
-}
-
-type LockingConfig struct {
-	Backend *string `json:"backend"`
+	LockingBackend   *string                 `json:"locking-backend"`
+	LockingTable     *string                 `json:"locking-table"`
 }
 
 func main() {
@@ -80,19 +83,29 @@ func mainAction(c *cli.Context) error {
 	if err != nil {
 		return cli.NewExitError(err.Error(), 1)
 	}
-	// todo: if using s3 for locking don't need this, make optional
-	if err := os.MkdirAll(conf.dataDir, 0755); err != nil {
-		return cli.NewExitError(fmt.Errorf("Failed to create data dir: %v", err), 1)
+	var db *bolt.DB
+	// if file is the locking backend then initialize the bolt DB
+	if conf.lockingBackend == fileLockingBackend {
+		if err := os.MkdirAll(conf.dataDir, 0755); err != nil {
+			return cli.NewExitError(fmt.Errorf("Failed to create data dir: %v", err), 1)
+		}
+		db, err = bolt.Open(path.Join(conf.dataDir, "atlantis.db"), 0600, &bolt.Options{Timeout: 1 * time.Second})
+		if err != nil {
+			if err.Error() == "timeout" {
+				return cli.NewExitError(errors.New("Failed to start Bolt DB due to a timeout. A likely cause is Atlantis already running"), 1)
+			}
+			return cli.NewExitError(fmt.Errorf("Failed to start Bolt DB: %v", err), 1)
+		}
+		if err = initDB(db); err != nil {
+			return cli.NewExitError(fmt.Errorf("Failed to initialize Bolt DB: %v", err), 1)
+		}
+		defer db.Close()
 	}
-	db, err := bolt.Open(path.Join(conf.dataDir, "atlantis.db"), 0600, &bolt.Options{Timeout: 1 * time.Second})
+	server, err := NewServer(conf, db)
 	if err != nil {
-		return cli.NewExitError(fmt.Errorf("Failed to start Bolt DB: %v", err), 1)
+		return cli.NewExitError(fmt.Errorf("Failed to start server: %s", err), 1)
 	}
-	if err = initDB(db); err != nil {
-		return cli.NewExitError(fmt.Errorf("Failed to initialize Bolt DB: %v", err), 1)
-	}
-	defer db.Close()
-	return NewServer(conf, db).Start()
+	return server.Start()
 }
 
 // configureCli sets up the flags, name of the cli, etc.
@@ -163,7 +176,18 @@ func configureCli(app *cli.App) {
 		},
 		cli.StringFlag{
 			Name: dataDirFlag,
+			Value: defaultDataDir,
 			Usage: "Directory to store Atlantis data",
+		},
+		cli.StringFlag{
+			Name: lockingBackendFlag,
+			Value: defaultLockingBackend,
+			Usage: "Which backend to use for locking: file (default) or dynamodb",
+		},
+		cli.StringFlag{
+			Name:  lockingTableFlag,
+			Value: defaultLockingTable,
+			Usage: "Name of the DynamoDB table used for locking. Only required if locking-backend is set to dynamodb. Defaults to 'atlantis-locks'",
 		},
 		// todo: allow option of where to log
 		// todo: network interface to bind to? by default localhost
@@ -194,6 +218,8 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 	requireApproval := false
 	atlantisURL := ""
 	dataDir := defaultDataDir
+	lockingBackend := defaultLockingBackend
+	lockingTable := defaultLockingTable
 
 	// check if config file flag is set
 	if c.IsSet(configFileFlag) {
@@ -244,6 +270,12 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 		}
 		if config.DataDir != nil {
 			dataDir = *config.DataDir
+		}
+		if config.LockingBackend != nil {
+			lockingBackend = *config.LockingBackend
+		}
+		if config.LockingBackend != nil {
+			lockingTable = *config.LockingTable
 		}
 		requireApproval = config.RequireApproval
 	}
@@ -300,6 +332,12 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 	if c.IsSet(dataDirFlag) {
 		dataDir = c.String(dataDirFlag)
 	}
+	if c.IsSet(lockingBackendFlag) {
+		lockingBackend = c.String(lockingBackendFlag)
+	}
+	if c.IsSet(lockingTableFlag) {
+		lockingTable = c.String(lockingTableFlag)
+	}
 
 	return &ServerConfig{
 		githubUsername:   ghUsername,
@@ -315,6 +353,8 @@ func validateConfig(c *cli.Context, hostname string) (*ServerConfig, error) {
 		atlantisURL:      atlantisURL,
 		requireApproval:  requireApproval,
 		dataDir:          dataDir,
+		lockingBackend:   lockingBackend,
+		lockingTable:     lockingTable,
 	}, nil
 }
 

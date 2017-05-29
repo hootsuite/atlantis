@@ -20,6 +20,7 @@ import (
 	"github.com/hootsuite/atlantis/logging"
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -40,7 +41,7 @@ type Server struct {
 	logger           *logging.SimpleLogger
 	githubComments   *GithubCommentRenderer
 	requestParser    *RequestParser
-	runLock          locking.LockManager
+	lockManager      locking.LockManager
 }
 
 type ServerConfig struct {
@@ -57,6 +58,8 @@ type ServerConfig struct {
 	atlantisURL      string
 	requireApproval  bool
 	dataDir          string
+	lockingBackend   string
+	lockingTable        string
 }
 
 type ExecutionContext struct {
@@ -78,7 +81,7 @@ type ExecutionContext struct {
 	log         *logging.SimpleLogger
 }
 
-func NewServer(config *ServerConfig, db *bolt.DB) *Server {
+func NewServer(config *ServerConfig, db *bolt.DB) (*Server, error) {
 	tp := github.BasicAuthTransport{
 		Username: strings.TrimSpace(config.githubUsername),
 		Password: strings.TrimSpace(config.githubPassword),
@@ -96,7 +99,16 @@ func NewServer(config *ServerConfig, db *bolt.DB) *Server {
 		AWSRegion:  config.awsRegion,
 		AWSRoleArn: config.awsAssumeRole,
 	}
-	runLocker := locking.NewBoltDBLockManager(db, boltDBRunLocksBucket)
+	var lockManager locking.LockManager
+	if config.lockingBackend == dynamoDBLockingBackend {
+		session, err := awsConfig.CreateAWSSession()
+		if err != nil {
+			return nil, errors.Wrap(err, "creating aws session for DynamoDB")
+		}
+		lockManager = locking.NewDynamoDBLockManager(config.lockingTable, session)
+	} else {
+		lockManager = locking.NewBoltDBLockManager(db, boltDBRunLocksBucket)
+	}
 	baseExecutor := BaseExecutor{
 		github:                githubClient,
 		awsConfig:             awsConfig,
@@ -107,7 +119,7 @@ func NewServer(config *ServerConfig, db *bolt.DB) *Server {
 		ghComments:            githubComments,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
-		runLock:              runLocker,
+		lockManager:           lockManager,
 	}
 	applyExecutor := &ApplyExecutor{BaseExecutor: baseExecutor, requireApproval: config.requireApproval, atlantisGithubUser: config.githubUsername}
 	planExecutor := &PlanExecutor{BaseExecutor: baseExecutor, atlantisURL: config.atlantisURL}
@@ -126,8 +138,8 @@ func NewServer(config *ServerConfig, db *bolt.DB) *Server {
 		logger:           logger,
 		githubComments:   githubComments,
 		requestParser:    &RequestParser{},
-		runLock:          runLocker,
-	}
+		lockManager:      lockManager,
+	}, nil
 }
 
 func (s *Server) Start() error {
@@ -155,7 +167,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		ID string
 	}
 	var results []runLock
-	locks, _ := s.runLock.ListLocks()
+	locks, _ := s.lockManager.ListLocks()
 	for id, v := range locks {
 		results = append(results, runLock{
 			v,
@@ -171,7 +183,7 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "no lock id in request")
 	}
-	if err := s.runLock.Unlock(id); err != nil {
+	if err := s.lockManager.Unlock(id); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "Failed to unlock: %s", err)
 		return
