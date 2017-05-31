@@ -32,7 +32,7 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	// check if there is an existing lock
 	getItemParams := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
-			"Key": {
+			"LockID": {
 				B: run.StateKey(),
 			},
 		},
@@ -118,7 +118,7 @@ func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
 		for _, item := range scanOut.Items {
 			lockIDItem, ok := item["LockID"]
 			if !ok || lockIDItem == nil {
-				return m, fmt.Errorf("lock did not have expected key 'LockId'")
+				return m, fmt.Errorf("lock did not have expected key 'LockID'")
 			}
 			lockID := string(hex.EncodeToString(lockIDItem.B))
 			runItem, ok := item["Run"]
@@ -133,11 +133,13 @@ func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
 			m[lockID] = run
 		}
 		startKey = scanOut.LastEvaluatedKey
+
+		// if there are no more pages then we're done
+		if len(startKey) == 0 {
+			return m, nil
+		}
 	}
-	if i == 1000 {
-		return m, errors.New("maxed out at 1000 scan iterations on the DynamodB table. Something must be wrong")
-	}
-	return m, nil
+	return m, errors.New("maxed out at 1000 scan iterations on the DynamoDB table. Something must be wrong")
 }
 
 func (d *DynamoDBLockManager) deserialize(bs []byte, run *Run) error {

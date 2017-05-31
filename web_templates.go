@@ -34,9 +34,9 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
     <p style="font-family: monospace, monospace; font-size: 1.0em; text-align: center;"><strong>Environments</strong></p>
     {{ if . }}
     {{ range . }}
-      <div class="twelve columns button content">
+      <div class="twelve columns button content lock-row">
         <div class="list-title">{{.RepoOwner}}/{{.RepoName}} - <span class="heading-font-size">#{{.PullID}}</span></div>
-        <div class="list-unlock"><button class="unlock js-unlock" data-unlock-url="/locks/{{.ID}}">Unlock</button></div>
+        <div class="list-unlock"><button class="unlock"><a class="unlock-link" href="/locks/{{.ID}}?method=DELETE">Unlock</a></button></div>
         <div class="list-status"><code>Locked</code></div>
         <div class="list-timestamp"><span class="heading-font-size">{{.Timestamp}}</span></div>
       </div>
@@ -47,6 +47,5 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
   </section>
 </div>
 </body>
-<script src="/static/js/unlock.js"></script>
 </html>
 `))

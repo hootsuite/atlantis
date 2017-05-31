@@ -234,10 +234,19 @@ tbody {
   color: #FFFFFF;
 }
 .unlock{
-  height: 30px;
-  margin-top: 4px;
-  vertical-align: middle;
+  height: 16px;
+  margin-top: 12px;
+  line-height: 18px;
+  padding: 0 10px;
+  font-family: monospace;
 }
 .list-unlock{
   float: right;
+}
+.lock-row{
+  cursor: default;
+}
+.unlock-link{
+  color: #555;
+  text-decoration: none;
 }

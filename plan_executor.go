@@ -335,7 +335,7 @@ func (p *PlanExecutor) plan(log *logging.SimpleLogger,
 		Status: "success",
 		Result: PlanSuccess{
 			TerraformOutput: output,
-			LockURL: fmt.Sprintf("%s%s/%s", p.atlantisURL, lockPath, lockAttempt.LockID),
+			LockURL: fmt.Sprintf("%s%s/%s?method=DELETE", p.atlantisURL, lockPath, lockAttempt.LockID),
 		},
 	}
 }

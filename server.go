@@ -150,6 +150,11 @@ func (s *Server) Start() error {
 	router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, AssetInfo: AssetInfo}))
 	router.HandleFunc("/hooks", s.postHooks).Methods("POST")
 	router.HandleFunc("/locks/{id}", s.deleteLock).Methods("DELETE")
+	// todo: remove this route when there is a detail view
+	// right now we need this route because from the pull request comment in GitHub only a GET request can be made
+	// in the future, the pull discard link will link to the detail view which will have a Delete button which will
+	// make an real DELETE call but we don't have a detail view right now
+	router.HandleFunc("/locks/{id}", s.deleteLock).Queries("method", "DELETE").Methods("GET")
 	n := negroni.New(&negroni.Recovery{
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		PrintStack: false,
@@ -162,12 +167,18 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
+	locks, err := s.lockManager.ListLocks()
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "Could not retrieve locks: %s", err)
+		return
+	}
+
 	type runLock struct {
 		locking.Run
 		ID string
 	}
 	var results []runLock
-	locks, _ := s.lockManager.ListLocks()
 	for id, v := range locks {
 		results = append(results, runLock{
 			v,
@@ -188,7 +199,7 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Failed to unlock: %s", err)
 		return
 	}
-	fmt.Fprintf(w, "Unlocked successfully")
+	fmt.Fprint(w, "Unlocked successfully")
 }
 
 func (s *Server) postHooks(w http.ResponseWriter, r *http.Request) {
