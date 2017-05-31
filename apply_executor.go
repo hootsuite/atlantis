@@ -61,7 +61,6 @@ func (a *ApplyExecutor) execute(ctx *ExecutionContext, prCtx *PullRequestContext
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *ExecutionContext, prCtx *PullRequestContext) ExecutionResult {
-	stashCtx := a.stashContext(ctx)
 	a.github.UpdateStatus(prCtx, PendingStatus, "Applying...")
 
 	if a.requireApproval {
@@ -98,7 +97,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *ExecutionContext, prCtx *PullRequestC
 	//runLog = append(runLog, fmt.Sprintf("-> Downloaded plans: %v", planPaths))
 	applyOutputs := []PathResult{}
 	for _, planPath := range planPaths {
-		output := a.apply(ctx, stashCtx, planPath)
+		output := a.apply(ctx, prCtx, planPath)
 		output.Path = planPath
 		applyOutputs = append(applyOutputs, output)
 	}
@@ -106,7 +105,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *ExecutionContext, prCtx *PullRequestC
 	return ExecutionResult{PathResults: applyOutputs}
 }
 
-func (a *ApplyExecutor) apply(ctx *ExecutionContext, stashCtx *StashPullRequestContext, planPath string) PathResult {
+func (a *ApplyExecutor) apply(ctx *ExecutionContext, prCtx *PullRequestContext, planPath string) PathResult {
 	//runLog = append(runLog, fmt.Sprintf("-> Running apply %s", planPath))
 	planName := path.Base(planPath)
 	planSubDir := a.determinePlanSubDir(planName, ctx.pullNum)
@@ -168,12 +167,12 @@ func (a *ApplyExecutor) apply(ctx *ExecutionContext, stashCtx *StashPullRequestC
 			tfEnv = "default"
 		}
 		run := locking.Run{
-			RepoOwner: stashCtx.owner,
-			RepoName: stashCtx.repoName,
+			RepoOwner: prCtx.owner,
+			RepoName: prCtx.repoName,
 			Path: execPath.Relative,
 			Env: tfEnv,
-			PullID: stashCtx.number,
-			User: stashCtx.terraformApplier,
+			PullID: prCtx.number,
+			User: prCtx.terraformApplier,
 			Timestamp: time.Now(),
 		}
 
@@ -184,7 +183,7 @@ func (a *ApplyExecutor) apply(ctx *ExecutionContext, stashCtx *StashPullRequestC
 				Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
 			}
 		}
-		if lockAttempt.LockAcquired != true && lockAttempt.LockingRun.PullID != stashCtx.number {
+		if lockAttempt.LockAcquired != true && lockAttempt.LockingRun.PullID != prCtx.number {
 			return PathResult{
 				Status: "error",
 				Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.LockingRun.PullID)},

@@ -13,7 +13,7 @@ import (
 	"github.com/hootsuite/atlantis/logging"
 )
 
-// PlanExecutor handles everything related to running the Terraform plan including integration with Stash, S3, Terraform, and Github
+// PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and Github
 type PlanExecutor struct {
 	BaseExecutor
 	atlantisURL string
@@ -67,7 +67,6 @@ func (p *PlanExecutor) execute(ctx *ExecutionContext, prCtx *PullRequestContext)
 }
 
 func (p *PlanExecutor) setupAndPlan(ctx *ExecutionContext, prCtx *PullRequestContext) ExecutionResult {
-	stashCtx := p.stashContext(ctx)
 	p.github.UpdateStatus(prCtx, "pending", "Planning...")
 
 	// todo: lock when cloning or somehow separate workspaces
@@ -185,7 +184,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *ExecutionContext, prCtx *PullRequestCon
 				p.terraform.tfExecutableName = "terraform"
 			}
 		}
-		generatePlanResponse := p.plan(ctx.log, p.stash, stashCtx, cloneDir, p.scratchDir, tfPlanName, s3Client, path, ctx.command.environment, s3Key, p.sshKey, ctx.pullCreator, config.StashPath)
+		generatePlanResponse := p.plan(ctx.log, prCtx, cloneDir, p.scratchDir, tfPlanName, s3Client, path, ctx.command.environment, s3Key, p.sshKey, ctx.pullCreator, config.StashPath)
 		generatePlanResponse.Path = path.Relative
 		planOutputs = append(planOutputs, generatePlanResponse)
 	}
@@ -196,8 +195,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *ExecutionContext, prCtx *PullRequestCon
 // plan runs the steps necessary to run `terraform plan`. If there is an error, the error message will be encapsulated in error
 // and the GeneratePlanResponse struct will also contain the full log including the error
 func (p *PlanExecutor) plan(log *logging.SimpleLogger,
-	stash *StashPRClient,
-	stashCtx *StashPullRequestContext,
+	prCtx *PullRequestContext,
 	repoDir string,
 	planOutDir string,
 	tfPlanName string,
@@ -210,12 +208,12 @@ func (p *PlanExecutor) plan(log *logging.SimpleLogger,
 	stashPath string) PathResult {
 	log.Info("generating plan for path %q", path)
 	run := locking.Run{
-		RepoOwner: stashCtx.owner,
-		RepoName: stashCtx.repoName,
-		Path: path.Relative,
-		Env: tfEnvName,
-		PullID: stashCtx.number,
-		User: stashCtx.terraformApplier,
+		RepoOwner: prCtx.owner,
+		RepoName:  prCtx.repoName,
+		Path:      path.Relative,
+		Env:       tfEnvName,
+		PullID:    prCtx.number,
+		User:      prCtx.terraformApplier,
 		Timestamp: time.Now(),
 	}
 
@@ -238,7 +236,7 @@ func (p *PlanExecutor) plan(log *logging.SimpleLogger,
 	}
 
 	// the run is locked unless the locking run is the same pull id as this run
-	if lockAttempt.LockAcquired == false && lockAttempt.LockingRun.PullID != stashCtx.number {
+	if lockAttempt.LockAcquired == false && lockAttempt.LockingRun.PullID != prCtx.number {
 		return PathResult{
 			Status: "failure",
 			Result: RunLockedFailure{lockAttempt.LockingRun.PullID},

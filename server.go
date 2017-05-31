@@ -90,7 +90,6 @@ func NewServer(config *ServerConfig, db *bolt.DB) (*Server, error) {
 	githubClientCtx := context.Background()
 	githubBaseClient.BaseURL, _ = url.Parse(fmt.Sprintf("https://%s/api/v3/", config.githubHostname))
 	githubClient := &GithubClient{client: githubBaseClient, ctx: githubClientCtx}
-	stashClient := &StashClient{}
 	terraformClient := &TerraformClient{
 		tfExecutableName: "terraform",
 	}
@@ -115,7 +114,6 @@ func NewServer(config *ServerConfig, db *bolt.DB) (*Server, error) {
 		scratchDir:            config.scratchDir,
 		s3Bucket:              config.s3Bucket,
 		sshKey:                config.sshKey,
-		stash:                 &StashPRClient{client: stashClient},
 		ghComments:            githubComments,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,

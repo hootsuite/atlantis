@@ -36,7 +36,7 @@ naming:
         - `successful` is when... it was successful
         - `failed` is when it didn't work but because of a user-solvable problem, like their terraform was wrong, or that environment doesn't exist
         - `errored` is when there was an internal Atlantis error that couldn't be fixed by the user, like a request to github timed out
-      - `result` has sub-types to represent different results. For example there is a `PlanResult` that has the output of `terraform plan`, and the url to `stash` to discard the plan
+      - `result` has sub-types to represent different results. For example there is a `PlanResult` that has the output of `terraform plan`, and the url to discard the plan and lock
     - We then need to add a `comment` back to the `pull request`, so we `render` the `executionResult` using a `renderer`. In this case, we need the `GithubCommentRenderer`
       - We can then add the `comment` to the `pull request` by using the `githubClient`
 
@@ -44,7 +44,6 @@ components:
   clients for external services:
     - github (created)
     - s3 (created)
-    - stash (created)
   clients for on-host "services":
     - git
     - aws cli
