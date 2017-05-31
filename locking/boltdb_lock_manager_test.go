@@ -112,7 +112,7 @@ var regularLock = LockCommand{
 	locking.TryLockResponse{
 		LockAcquired: true,
 		LockingRun: run,
-		LockID: "663c42c8f03390a582eee16f2b96de642722cfdcb7c96bd462a6bd7dfa08cbe1",
+		LockID: "f13c9d87dc7156638cc075f0164d628f1338d23b17296dd391d922ea6fe6e9f8",
 	},
 }
 
@@ -138,7 +138,7 @@ var tableTestData = []struct {
 		sequence: []interface{}{
 			regularLock,
 			UnlockCommand{
-				"663c42c8f03390a582eee16f2b96de642722cfdcb7c96bd462a6bd7dfa08cbe1",
+				"f13c9d87dc7156638cc075f0164d628f1338d23b17296dd391d922ea6fe6e9f8",
 				nil,
 			},
 		},
@@ -214,7 +214,7 @@ var tableTestData = []struct {
 		sequence: []interface{}{
 			regularLock,
 			UnlockCommand{
-				"663c42c8f03390a582eee16f2b96de642722cfdcb7c96bd462a6bd7dfa08cbe1",
+				"f13c9d87dc7156638cc075f0164d628f1338d23b17296dd391d922ea6fe6e9f8",
 				nil,
 			},
 			LockCommand{

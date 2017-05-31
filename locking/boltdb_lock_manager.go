@@ -54,7 +54,7 @@ func (b BoltDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	})
 
 	if transactionErr != nil {
-		return response, errors.Wrap(transactionErr, "db transaction failed")
+		return response, errors.Wrap(transactionErr, "DB transaction failed")
 	}
 
 	return response, nil
@@ -69,7 +69,7 @@ func (b BoltDBLockManager) Unlock(lockID string) error {
 		locks := tx.Bucket(b.locksBucket)
 		return locks.Delete(idAsHex)
 	})
-	return errors.Wrap(err, "db transaction failed")
+	return errors.Wrap(err, "DB transaction failed")
 }
 
 func (b BoltDBLockManager) ListLocks() (map[string]Run, error) {
@@ -85,7 +85,7 @@ func (b BoltDBLockManager) ListLocks() (map[string]Run, error) {
 		return nil
 	})
 	if err != nil {
-		return m, errors.Wrap(err, "db transaction failed")
+		return m, errors.Wrap(err, "DB transaction failed")
 	}
 
 	// deserialize bytes into the proper objects

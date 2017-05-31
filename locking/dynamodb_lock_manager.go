@@ -8,17 +8,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"encoding/hex"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 )
 
 type DynamoDBLockManager struct {
-	db *dynamodb.DynamoDB
-	lockTable string
+	DB        dynamodbiface.DynamoDBAPI
+	LockTable string
 }
 
 func NewDynamoDBLockManager(lockTable string, p client.ConfigProvider) *DynamoDBLockManager {
 	return &DynamoDBLockManager{
-		db: dynamodb.New(p),
-		lockTable: lockTable,
+		DB:        dynamodb.New(p),
+		LockTable: lockTable,
 	}
 }
 
@@ -36,10 +37,10 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 				B: run.StateKey(),
 			},
 		},
-		TableName: aws.String(d.lockTable),
+		TableName: aws.String(d.LockTable),
 		ConsistentRead: aws.Bool(true),
 	}
-	item, err := d.db.GetItem(getItemParams)
+	item, err := d.DB.GetItem(getItemParams)
 	if err != nil {
 		return r, errors.Wrap(err, "checking if lock exists")
 	}
@@ -67,12 +68,12 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 			"LockID": {B: run.StateKey()},
 			"Run":   {B: newRunSerialized},
 		},
-		TableName:           aws.String(d.lockTable),
+		TableName:           aws.String(d.LockTable),
 		// this will ensure that we don't insert the new item in a race situation
 		// where someone has written this key just after our read
 		ConditionExpression: aws.String("attribute_not_exists(LockID)"),
 	}
-	if _, err := d.db.PutItem(putItem); err != nil {
+	if _, err := d.DB.PutItem(putItem); err != nil {
 		return r, errors.Wrap(err, "writing lock")
 	}
 	return TryLockResponse{
@@ -92,9 +93,9 @@ func (d *DynamoDBLockManager) Unlock(lockID string) error {
 		Key: map[string]*dynamodb.AttributeValue{
 			"LockID": {B: idAsBytes},
 		},
-		TableName: aws.String(d.lockTable),
+		TableName: aws.String(d.LockTable),
 	}
-	_, err = d.db.DeleteItem(params)
+	_, err = d.DB.DeleteItem(params)
 	return errors.Wrap(err, "deleting lock")
 }
 
@@ -102,7 +103,7 @@ func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
 	m := make(map[string]Run)
 	params := &dynamodb.ScanInput{
 		ProjectionExpression: aws.String("LockID,Run"),
-		TableName: aws.String(d.lockTable),
+		TableName: aws.String(d.LockTable),
 	}
 
 	// loop to get all locks since if datasize is over 1MB the client will page.
@@ -111,7 +112,7 @@ func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
 	var startKey map[string]*dynamodb.AttributeValue
 	for ; i < 1000; i++ {
 		params.SetExclusiveStartKey(startKey)
-		scanOut, err := d.db.Scan(params)
+		scanOut, err := d.DB.Scan(params)
 		if err != nil {
 			return m, errors.Wrap(err, "reading dynamodb")
 		}
