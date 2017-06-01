@@ -16,6 +16,11 @@ type DynamoDBLockManager struct {
 	LockTable string
 }
 
+type dynamoDBRun struct {
+	Run
+	LockID string
+}
+
 func NewDynamoDBLockManager(lockTable string, p client.ConfigProvider) *DynamoDBLockManager {
 	return &DynamoDBLockManager{
 		DB:        dynamodb.New(p),
@@ -34,7 +39,7 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	getItemParams := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			"LockID": {
-				B: run.StateKey(),
+				S: aws.String(run.StateKey()),
 			},
 		},
 		TableName: aws.String(d.LockTable),
@@ -58,14 +63,14 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 		return TryLockResponse{
 			LockAcquired: false,
 			LockingRun: lockingRun,
-			LockID: string(hex.EncodeToString(run.StateKey())),
+			LockID: run.StateKey(),
 		}, nil
 	}
 
 	// else we should be able to lock
 	putItem := &dynamodb.PutItemInput{
 		Item: map[string]*dynamodb.AttributeValue{
-			"LockID": {B: run.StateKey()},
+			"LockID": {S: aws.String(run.StateKey())},
 			"Run":   {B: newRunSerialized},
 		},
 		TableName:           aws.String(d.LockTable),
@@ -79,7 +84,7 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	return TryLockResponse{
 		LockAcquired: true,
 		LockingRun: run,
-		LockID: string(hex.EncodeToString(run.StateKey())),
+		LockID: run.StateKey(),
 	}, nil
 }
 
@@ -141,6 +146,10 @@ func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
 		}
 	}
 	return m, errors.New("maxed out at 1000 scan iterations on the DynamoDB table. Something must be wrong")
+}
+
+func (d *DynamoDBLockManager) FindLocksForPull(fullRepoName string, pullNum int) ([]string, error) {
+	return nil, nil
 }
 
 func (d *DynamoDBLockManager) deserialize(bs []byte, run *Run) error {
