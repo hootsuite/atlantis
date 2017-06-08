@@ -232,7 +232,7 @@ var _ = Describe("BoltDBLockManager", func() {
 })
 
 // NewTestDB returns a TestDB using a temporary path.
-func NewTestDB() *bolt.DB {
+func NewTestDB() (*bolt.DB, *locking.BoltDBLockManager) {
 	// Retrieve a temporary path.
 	f, err := ioutil.TempFile("", "")
 	if err != nil {
@@ -254,5 +254,6 @@ func NewTestDB() *bolt.DB {
 	}); err != nil {
 		panic(errors.Wrap(err, "could not create bucket"))
 	}
-	return db
+	b, _ := locking.NewBoltDBLockManagerWithDB(db, LockBucket)
+	return db, b
 }
