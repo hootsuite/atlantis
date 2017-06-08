@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"fmt"
-	"os"
 	"github.com/hootsuite/atlantis/server"
 	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"os"
 )
 
 // To add a new flag you must
@@ -85,35 +85,36 @@ var stringFlags = []stringFlag{
 		value:       "atlantis-locks",
 	},
 	{
-		name: configFlag,
+		name:        configFlag,
 		description: "Config file.",
 	},
 	{
-		name: ghUserFlag,
+		name:        ghUserFlag,
 		description: "GitHub username of API user. Can also be specified via the ATLANTIS_GH_USER environment variable.",
-		env: "ATLANTIS_GH_USER",
+		env:         "ATLANTIS_GH_USER",
 	},
 	{
-		name: ghPasswordFlag,
+		name:        ghPasswordFlag,
 		description: "GitHub password of API user. Can also be specified via the ATLANTIS_GH_PASSWORD environment variable.",
-		env: "ATLANTIS_GH_PASSWORD",
+		env:         "ATLANTIS_GH_PASSWORD",
 	},
 }
 var boolFlags = []boolFlag{
 	{
-		name: requireApprovalFlag,
+		name:        requireApprovalFlag,
 		description: "Require pull requests to be \"Approved\" before allowing the apply command to be run.",
-		value: true,
+		value:       true,
 	},
 }
 var intFlags = []intFlag{
 	{
-		name: portFlag,
+		name:        portFlag,
 		description: "Port to bind to.",
-		value: 4141,
+		value:       4141,
 	},
 }
-type stringFlag struct{
+
+type stringFlag struct {
 	name        string
 	description string
 	value       string
@@ -122,12 +123,12 @@ type stringFlag struct{
 type intFlag struct {
 	name        string
 	description string
-	value int
+	value       int
 }
 type boolFlag struct {
 	name        string
 	description string
-	value bool
+	value       bool
 }
 
 var serverCmd = &cobra.Command{
@@ -164,7 +165,7 @@ Config values are overridden by environment variables which in turn are overridd
 		// config looks good, start the server
 		server, err := server.NewServer(config)
 		if err != nil {
-			return errors.Wrap(err,"Failed to initialize server")
+			return errors.Wrap(err, "Failed to initialize server")
 		}
 		return server.Start()
 	},
