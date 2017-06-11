@@ -238,8 +238,8 @@ func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.P
 	locks, err := s.lockManager.FindLocksForPull(repo, pullNum)
 	if err != nil {
 		s.logger.Err("finding locks for repo %s pull %d: %s", repo, pullNum, err)
-		fmt.Fprintf(w, "Error finding locks: %s\n", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "Error finding locks: %s\n", err)
 		return
 	}
 
@@ -253,8 +253,8 @@ func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.P
 
 	if len(errors) != 0 {
 		s.logger.Err("unlocking locks for repo %s pull %d: %v", repo, pullNum, errors)
-		fmt.Fprintf(w, "Error unlocking locks: %v\n", errors)
 		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "Error unlocking locks: %v\n", errors)
 		return
 	}
 

@@ -9,16 +9,31 @@ import (
 	"fmt"
 	"encoding/hex"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
+	"time"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"strconv"
 )
+
+// Data model:
+// Key: LockID. LockID is made up of {repoFullName}/{path}/{environment}
+// Queries that need to be run
+// - get all locks
+// - delete by ID
+// - get locks for a specific pull num
 
 type DynamoDBLockManager struct {
 	DB        dynamodbiface.DynamoDBAPI
 	LockTable string
 }
 
-type dynamoDBRun struct {
-	Run
-	LockID string
+type dynamoRun struct {
+	LockID       string
+	RepoFullName string
+	Path         string
+	Env          string
+	PullNum      int
+	User         string
+	Timestamp    time.Time
 }
 
 func NewDynamoDBLockManager(lockTable string, p client.ConfigProvider) *DynamoDBLockManager {
@@ -30,9 +45,9 @@ func NewDynamoDBLockManager(lockTable string, p client.ConfigProvider) *DynamoDB
 
 func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	var r TryLockResponse
-	newRunSerialized, err := d.serialize(run)
+	newRunSerialized, err := d.toDynamoItem(run)
 	if err != nil {
-		return r, errors.Wrap(err, "serializing run data")
+		return r, errors.Wrap(err, "serializing")
 	}
 
 	// check if there is an existing lock
@@ -50,16 +65,14 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 		return r, errors.Wrap(err, "checking if lock exists")
 	}
 
+
 	// if there is already a lock then we can't acquire a lock. Return the existing lock
 	if len(item.Item) != 0 {
-		runAttr, ok := item.Item["Run"]
-		if !ok || runAttr == nil || len(runAttr.B) == 0 {
-			return r, fmt.Errorf("found an existing lock at that id but it did not contain expected 'Run' key. We suggest manually deleting this key from DynamoDB")
+		var dynamoRun dynamoRun
+		if err := dynamodbattribute.UnmarshalMap(item.Item, &dynamoRun); err != nil {
+			return r, errors.Wrap(err,"found an existing lock at that id but it could not be deserialized. We suggest manually deleting this key from DynamoDB")
 		}
-		var lockingRun Run
-		if err := d.deserialize(runAttr.B, &lockingRun); err != nil {
-			return r, errors.Wrap(err, "deserializing existing lock")
-		}
+		lockingRun := d.fromDynamoItem(dynamoRun)
 		return TryLockResponse{
 			LockAcquired: false,
 			LockingRun: lockingRun,
@@ -69,11 +82,8 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 
 	// else we should be able to lock
 	putItem := &dynamodb.PutItemInput{
-		Item: map[string]*dynamodb.AttributeValue{
-			"LockID": {S: aws.String(run.StateKey())},
-			"Run":   {B: newRunSerialized},
-		},
-		TableName:           aws.String(d.LockTable),
+		Item:      newRunSerialized,
+		TableName: aws.String(d.LockTable),
 		// this will ensure that we don't insert the new item in a race situation
 		// where someone has written this key just after our read
 		ConditionExpression: aws.String("attribute_not_exists(LockID)"),
@@ -89,67 +99,93 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 }
 
 func (d *DynamoDBLockManager) Unlock(lockID string) error {
-	idAsBytes, err := hex.DecodeString(lockID)
-	if err != nil {
-		return errors.Wrap(err, "id was not in correct format")
-	}
-
 	params := &dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
-			"LockID": {B: idAsBytes},
+			"LockID": {S: aws.String(lockID)},
 		},
 		TableName: aws.String(d.LockTable),
 	}
-	_, err = d.DB.DeleteItem(params)
+	_, err := d.DB.DeleteItem(params)
 	return errors.Wrap(err, "deleting lock")
 }
 
 func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
-	m := make(map[string]Run)
 	params := &dynamodb.ScanInput{
-		ProjectionExpression: aws.String("LockID,Run"),
 		TableName: aws.String(d.LockTable),
 	}
 
-	// loop to get all locks since if datasize is over 1MB the client will page.
-	// we're setting a counter here just in case something goes horribly wrong and we loop forever
-	var i int
-	var startKey map[string]*dynamodb.AttributeValue
-	for ; i < 1000; i++ {
-		params.SetExclusiveStartKey(startKey)
-		scanOut, err := d.DB.Scan(params)
-		if err != nil {
-			return m, errors.Wrap(err, "reading dynamodb")
+	m := make(map[string]Run)
+	var err, internalErr error
+	err = d.DB.ScanPages(params, func(out *dynamodb.ScanOutput, lastPage bool) bool {
+		var runs []dynamoRun
+		if err := dynamodbattribute.UnmarshalListOfMaps(out.Items, &runs); err != nil {
+			internalErr = errors.Wrap(err,"deserializing locks")
+			return false
 		}
-		for _, item := range scanOut.Items {
-			lockIDItem, ok := item["LockID"]
-			if !ok || lockIDItem == nil {
-				return m, fmt.Errorf("lock did not have expected key 'LockID'")
-			}
-			lockID := string(hex.EncodeToString(lockIDItem.B))
-			runItem, ok := item["Run"]
-			if !ok || runItem == nil {
-				return m, fmt.Errorf("lock did not have expected key 'Run'")
-			}
+		for _, run := range runs {
+			m[run.LockID] = d.fromDynamoItem(run)
+		}
+		return lastPage
+	})
 
-			var run Run
-			if err := d.deserialize(runItem.B, &run); err != nil {
-				return m, fmt.Errorf("deserializing run at key %q: %s", lockID, err)
-			}
-			m[lockID] = run
-		}
-		startKey = scanOut.LastEvaluatedKey
-
-		// if there are no more pages then we're done
-		if len(startKey) == 0 {
-			return m, nil
-		}
+	if err == nil && internalErr != nil {
+		err = internalErr
 	}
-	return m, errors.New("maxed out at 1000 scan iterations on the DynamoDB table. Something must be wrong")
+	return m, errors.Wrap(err, "scanning dynamodb")
 }
 
-func (d *DynamoDBLockManager) FindLocksForPull(fullRepoName string, pullNum int) ([]string, error) {
-	return nil, nil
+func (d *DynamoDBLockManager) FindLocksForPull(repoFullName string, pullNum int) ([]string, error) {
+	params := &dynamodb.ScanInput{
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":pullNum": {
+				N: aws.String(strconv.Itoa(pullNum)),
+			},
+			":repoFullName": {
+				S: aws.String(repoFullName),
+			},
+		},
+		FilterExpression: aws.String("RepoFullName = :repoFullName and PullNum = :pullNum"),
+		TableName: aws.String(d.LockTable),
+	}
+
+	var ids []string
+	var err, internalErr error
+	err = d.DB.ScanPages(params, func(out *dynamodb.ScanOutput, lastPage bool) bool {
+		var runs []dynamoRun
+		if err := dynamodbattribute.UnmarshalListOfMaps(out.Items, &runs); err != nil {
+			internalErr = errors.Wrap(err,"deserializing locks")
+			return false
+		}
+		for _, run := range runs {
+			ids = append(ids, run.LockID)
+		}
+		return lastPage
+	})
+
+	if err == nil && internalErr != nil {
+		err = internalErr
+	}
+	return ids, errors.Wrap(err,"scanning dynamodb")
+}
+
+func (d *DynamoDBLockManager) deserializeItem(item map[string]*dynamodb.AttributeValue) (string, Run, error) {
+	var lockID string
+	var run Run
+
+	lockIDItem, ok := item["LockID"]
+	if !ok || lockIDItem == nil {
+		return lockID, run, fmt.Errorf("lock did not have expected key 'LockID'")
+	}
+	lockID = string(hex.EncodeToString(lockIDItem.B))
+	runItem, ok := item["Run"]
+	if !ok || runItem == nil {
+		return lockID, run, fmt.Errorf("lock did not have expected key 'Run'")
+	}
+
+	if err := d.deserialize(runItem.B, &run); err != nil {
+		return lockID, run, fmt.Errorf("deserializing run at key %q: %s", lockID, err)
+	}
+	return lockID, run, nil
 }
 
 func (d *DynamoDBLockManager) deserialize(bs []byte, run *Run) error {
@@ -158,4 +194,28 @@ func (d *DynamoDBLockManager) deserialize(bs []byte, run *Run) error {
 
 func (d *DynamoDBLockManager) serialize(run Run) ([]byte, error) {
 	return json.Marshal(run)
+}
+
+func (d *DynamoDBLockManager) toDynamoItem(run Run) (map[string]*dynamodb.AttributeValue, error) {
+	item := dynamoRun{
+		LockID: run.StateKey(),
+		PullNum: run.PullNum,
+		RepoFullName: run.RepoFullName,
+		Env: run.Env,
+		Path: run.Path,
+		Timestamp: run.Timestamp,
+		User: run.User,
+	}
+	return dynamodbattribute.MarshalMap(item)
+}
+
+func (d *DynamoDBLockManager) fromDynamoItem(dynamoRun dynamoRun) Run {
+	return Run{
+		User: dynamoRun.User,
+		Timestamp: dynamoRun.Timestamp,
+		Path: dynamoRun.Path,
+		Env: dynamoRun.Env,
+		RepoFullName: dynamoRun.RepoFullName,
+		PullNum: dynamoRun.PullNum,
+	}
 }
