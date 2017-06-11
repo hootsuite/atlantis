@@ -20,6 +20,7 @@ import (
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"io/ioutil"
 )
 
 const (
@@ -203,24 +204,64 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Unlocked successfully")
 }
 
+// postHooks handles comment and pull request events from GitHub
 func (s *Server) postHooks(w http.ResponseWriter, r *http.Request) {
 	githubReqID := "X-Github-Delivery=" + r.Header.Get("X-Github-Delivery")
 
-	// try to parse webhook data as a comment event
-	decoder := json.NewDecoder(r.Body)
-	var comment github.IssueCommentEvent
-	if err := decoder.Decode(&comment); err != nil {
-		s.logger.Debug("Ignoring non-comment-event request %s", githubReqID)
-		fmt.Fprintln(w, "Ignoring")
+	defer r.Body.Close()
+	bytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w,"could not read body: %s\n", err)
 		return
 	}
 
-	if comment.Action == nil || *comment.Action != "created" {
-		s.logger.Debug("Ignoring request because the action was not 'created' %s", githubReqID)
+	// Try to unmarshal the request into the supported event types
+	var commentEvent github.IssueCommentEvent
+	var pullEvent github.PullRequestEvent
+	if json.Unmarshal(bytes, &commentEvent) == nil && s.isCommentCreatedEvent(commentEvent) {
+		s.logger.Debug("Handling comment event %s", githubReqID)
+		s.handleCommentCreatedEvent(w, commentEvent, githubReqID)
+	} else if json.Unmarshal(bytes, &pullEvent) == nil && s.isPullClosedEvent(pullEvent) {
+		s.logger.Debug("Handling pull request event %s", githubReqID)
+		s.handlePullClosedEvent(w, pullEvent, githubReqID)
+	} else {
+		s.logger.Debug("Ignoring unsupported event %s", githubReqID)
 		fmt.Fprintln(w, "Ignoring")
+	}
+}
+
+// handlePullClosedEvent will delete any locks associated with the pull request
+func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.PullRequestEvent, githubReqID string) {
+	repo := *pullEvent.Repo.FullName
+	pullNum := *pullEvent.PullRequest.Number
+	locks, err := s.lockManager.FindLocksForPull(repo, pullNum)
+	if err != nil {
+		s.logger.Err("finding locks for repo %s pull %d: %s", repo, pullNum, err)
+		fmt.Fprintf(w, "Error finding locks: %s\n", err)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
+	s.logger.Debug("Unlocking locks %v %s", locks, githubReqID)
+	var errors []error
+	for _, l := range locks {
+		if err := s.lockManager.Unlock(l); err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	if len(errors) != 0 {
+		s.logger.Err("unlocking locks for repo %s pull %d: %v", repo, pullNum, errors)
+		fmt.Fprintf(w, "Error unlocking locks: %v\n", errors)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	fmt.Fprintln(w,"Locks unlocked")
+}
+
+func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github.IssueCommentEvent, githubReqID string) {
 	// determine if the comment matches a plan or apply command
 	ctx := &ExecutionContext{}
 	command, err := s.requestParser.determineCommand(&comment)
@@ -268,6 +309,14 @@ func (s *Server) executeCommand(ctx *ExecutionContext) {
 	default:
 		ctx.log.Err("failed to determine desired command, neither plan nor apply")
 	}
+}
+
+func (s *Server) isCommentCreatedEvent(event github.IssueCommentEvent) bool {
+	return event.Action != nil && *event.Action == "created" && event.Comment != nil
+}
+
+func (s *Server) isPullClosedEvent(event github.PullRequestEvent) bool {
+	return event.Action != nil && *event.Action == "closed" && event.PullRequest != nil
 }
 
 // recover logs and creates a comment on the pull request for panics
