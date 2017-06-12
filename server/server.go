@@ -24,11 +24,12 @@ import (
 )
 
 const (
-	lockPath = "/locks"
+	deleteLockRoute = "delete-lock"
 )
 
 // WebhookServer listens for Github webhooks and runs the necessary Atlantis command
 type Server struct {
+	router           *mux.Router
 	port             int
 	scratchDir       string
 	awsRegion        string
@@ -42,6 +43,7 @@ type Server struct {
 	githubComments   *GithubCommentRenderer
 	requestParser    *RequestParser
 	lockManager      locking.LockManager
+	atlantisURL      string
 }
 
 // the mapstructure tags correspond to flags in cmd/server.go
@@ -124,10 +126,12 @@ func NewServer(config ServerConfig) (*Server, error) {
 		lockManager:           lockManager,
 	}
 	applyExecutor := &ApplyExecutor{BaseExecutor: baseExecutor, requireApproval: config.RequireApproval, atlantisGithubUser: config.GitHubUser}
-	planExecutor := &PlanExecutor{BaseExecutor: baseExecutor, atlantisURL: config.AtlantisURL}
+	planExecutor := &PlanExecutor{BaseExecutor: baseExecutor}
 	helpExecutor := &HelpExecutor{BaseExecutor: baseExecutor}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
+	router := mux.NewRouter()
 	return &Server{
+		router:           router,
 		port:             config.Port,
 		scratchDir:       config.ScratchDir,
 		awsRegion:        config.AWSRegion,
@@ -141,29 +145,37 @@ func NewServer(config ServerConfig) (*Server, error) {
 		githubComments:   githubComments,
 		requestParser:    &RequestParser{},
 		lockManager:      lockManager,
+		atlantisURL:       config.AtlantisURL,
 	}, nil
 }
 
 func (s *Server) Start() error {
-	router := mux.NewRouter()
-	router.HandleFunc("/", s.index).Methods("GET").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+	s.router.HandleFunc("/", s.index).Methods("GET").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		return r.URL.Path == "/" || r.URL.Path == "/index.html"
 	})
-	router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, AssetInfo: AssetInfo}))
-	router.HandleFunc("/hooks", s.postHooks).Methods("POST")
-	router.HandleFunc("/locks/{id}", s.deleteLock).Methods("DELETE")
+	s.router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, AssetInfo: AssetInfo}))
+	s.router.HandleFunc("/hooks", s.postHooks).Methods("POST")
+	s.router.HandleFunc("/locks", s.deleteLock).Methods("DELETE").Queries("id", "{id:.*}")
 	// todo: remove this route when there is a detail view
 	// right now we need this route because from the pull request comment in GitHub only a GET request can be made
 	// in the future, the pull discard link will link to the detail view which will have a Delete button which will
 	// make an real DELETE call but we don't have a detail view right now
-	router.HandleFunc("/locks/{id}", s.deleteLock).Queries("method", "DELETE").Methods("GET")
+	deleteLockRoute := s.router.HandleFunc("/locks", s.deleteLock).Queries("id", "{id}", "method", "DELETE").Methods("GET").Name(deleteLockRoute)
+
+	// function that planExecutor can use to construct delete lock urls
+	// injecting this here because this is the earliest routes are created
+	s.planExecutor.DeleteLockURL = func (lockID string) string {
+		// ignoring error since guaranteed to succeed if "id" is specified
+		u, _ := deleteLockRoute.URL("id", url.QueryEscape(lockID))
+		return s.atlantisURL + u.RequestURI()
+	}
 	n := negroni.New(&negroni.Recovery{
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		PrintStack: false,
 		StackAll:   false,
 		StackSize:  1024 * 8,
 	}, middleware.NewNon200Logger(s.logger))
-	n.UseHandler(router)
+	n.UseHandler(s.router)
 	s.logger.Info("Atlantis started - listening on port %v", s.port)
 	return cli.NewExitError(http.ListenAndServe(fmt.Sprintf(":%d", s.port), n), 1)
 }
@@ -178,13 +190,14 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 
 	type runLock struct {
 		locking.Run
-		ID string
+		UnlockURL string
 	}
 	var results []runLock
 	for id, v := range locks {
+		u, _ := s.router.Get(deleteLockRoute).URL("id", url.QueryEscape(id))
 		results = append(results, runLock{
 			v,
-			id,
+			u.String(),
 		})
 	}
 	indexTemplate.Execute(w, results)
@@ -196,7 +209,12 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "no lock id in request")
 	}
-	if err := s.lockManager.Unlock(id); err != nil {
+	idUnencoded, err := url.PathUnescape(id)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "invalid lock id")
+	}
+	if err := s.lockManager.Unlock(idUnencoded); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "Failed to unlock: %s", err)
 		return

@@ -16,7 +16,8 @@ import (
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and Github
 type PlanExecutor struct {
 	BaseExecutor
-	atlantisURL string
+	// DeleteLockURL is a function that given a lock id will return a url for deleting the lock
+	DeleteLockURL func(id string) (url string)
 }
 
 /** Result Types **/
@@ -332,7 +333,7 @@ func (p *PlanExecutor) plan(log *logging.SimpleLogger,
 		Status: "success",
 		Result: PlanSuccess{
 			TerraformOutput: output,
-			LockURL: fmt.Sprintf("%s%s/%s?method=DELETE", p.atlantisURL, lockPath, lockAttempt.LockID),
+			LockURL: p.DeleteLockURL(lockAttempt.LockID),
 		},
 	}
 }

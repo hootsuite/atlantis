@@ -14,13 +14,6 @@ import (
 	"strconv"
 )
 
-// Data model:
-// Key: LockID. LockID is made up of {repoFullName}/{path}/{environment}
-// Queries that need to be run
-// - get all locks
-// - delete by ID
-// - get locks for a specific pull num
-
 type DynamoDBLockManager struct {
 	DB        dynamodbiface.DynamoDBAPI
 	LockTable string
