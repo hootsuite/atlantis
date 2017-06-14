@@ -102,7 +102,6 @@ func (r *RequestParser) extractCommentData(comment *github.IssueCommentEvent, pa
 	params.pullNum = *pullNum
 	params.pullCreator = *pullCreator
 	params.repoSSHUrl = *repoSSHURL
-	params.htmlUrl = *htmlURL
 	return nil
 }
 

@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"github.com/hootsuite/atlantis/locking/dynamodb"
 	"github.com/hootsuite/atlantis/locking/boltdb"
+	"github.com/hootsuite/atlantis/models"
 )
 
 const (
@@ -74,17 +75,21 @@ type ExecutionContext struct {
 	pullNum           int
 	requesterUsername string
 	requesterEmail    string
-	comment           string
 	repoSSHUrl        string
 	head              string
 	// commit base sha
 	base              string
 	pullLink          string
 	branch            string
-	htmlUrl           string
 	pullCreator       string
 	command           *Command
 	log         *logging.SimpleLogger
+}
+
+type CommentContext struct {
+	Repo models.Repo
+	PullRequest models.PullRequest
+	User models.User
 }
 
 func NewServer(config ServerConfig) (*Server, error) {
