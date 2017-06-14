@@ -21,6 +21,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"io/ioutil"
+	"github.com/hootsuite/atlantis/locking/dynamodb"
+	"github.com/hootsuite/atlantis/locking/boltdb"
 )
 
 const (
@@ -42,7 +44,7 @@ type Server struct {
 	logger           *logging.SimpleLogger
 	githubComments   *GithubCommentRenderer
 	requestParser    *RequestParser
-	lockManager      locking.LockManager
+	lockManager      locking.Backend
 	atlantisURL      string
 }
 
@@ -100,16 +102,16 @@ func NewServer(config ServerConfig) (*Server, error) {
 		AWSRegion:  config.AWSRegion,
 		AWSRoleArn: config.AssumeRole,
 	}
-	var lockManager locking.LockManager
-	if config.LockingBackend == locking.DynamoDBLockingBackend {
+	var lockManager locking.Backend
+	if config.LockingBackend == locking.DynamoDBBackend {
 		session, err := awsConfig.CreateAWSSession()
 		if err != nil {
 			return nil, errors.Wrap(err, "creating aws session for DynamoDB")
 		}
-		lockManager = locking.NewDynamoDBLockManager(config.LockingTable, session)
+		lockManager = dynamodb.New(config.LockingTable, session)
 	} else {
 		var err error
-		lockManager, err = locking.NewBoltDBLockManager(config.DataDir, locking.BoltDBRunLocksBucket)
+		lockManager, err = boltdb.New(config.DataDir, locking.BoltDBRunLocksBucket)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +125,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		ghComments:            githubComments,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
-		lockManager:           lockManager,
+		lockingBackend:        lockManager,
 	}
 	applyExecutor := &ApplyExecutor{BaseExecutor: baseExecutor, requireApproval: config.RequireApproval, atlantisGithubUser: config.GitHubUser}
 	planExecutor := &PlanExecutor{BaseExecutor: baseExecutor}

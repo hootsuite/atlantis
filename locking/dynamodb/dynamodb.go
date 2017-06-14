@@ -1,4 +1,4 @@
-package locking
+package dynamodb
 
 import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -12,9 +12,10 @@ import (
 	"time"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"strconv"
+	"github.com/hootsuite/atlantis/locking"
 )
 
-type DynamoDBLockManager struct {
+type Backend struct {
 	DB        dynamodbiface.DynamoDBAPI
 	LockTable string
 }
@@ -29,15 +30,15 @@ type dynamoRun struct {
 	Timestamp    time.Time
 }
 
-func NewDynamoDBLockManager(lockTable string, p client.ConfigProvider) *DynamoDBLockManager {
-	return &DynamoDBLockManager{
+func New(lockTable string, p client.ConfigProvider) *Backend {
+	return &Backend{
 		DB:        dynamodb.New(p),
 		LockTable: lockTable,
 	}
 }
 
-func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
-	var r TryLockResponse
+func (d *Backend) TryLock(run locking.Run) (locking.TryLockResponse, error) {
+	var r locking.TryLockResponse
 	newRunSerialized, err := d.toDynamoItem(run)
 	if err != nil {
 		return r, errors.Wrap(err, "serializing")
@@ -66,7 +67,7 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 			return r, errors.Wrap(err,"found an existing lock at that id but it could not be deserialized. We suggest manually deleting this key from DynamoDB")
 		}
 		lockingRun := d.fromDynamoItem(dynamoRun)
-		return TryLockResponse{
+		return locking.TryLockResponse{
 			LockAcquired: false,
 			LockingRun: lockingRun,
 			LockID: run.StateKey(),
@@ -84,14 +85,14 @@ func (d *DynamoDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	if _, err := d.DB.PutItem(putItem); err != nil {
 		return r, errors.Wrap(err, "writing lock")
 	}
-	return TryLockResponse{
+	return locking.TryLockResponse{
 		LockAcquired: true,
 		LockingRun: run,
 		LockID: run.StateKey(),
 	}, nil
 }
 
-func (d *DynamoDBLockManager) Unlock(lockID string) error {
+func (d *Backend) Unlock(lockID string) error {
 	params := &dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
 			"LockID": {S: aws.String(lockID)},
@@ -102,12 +103,12 @@ func (d *DynamoDBLockManager) Unlock(lockID string) error {
 	return errors.Wrap(err, "deleting lock")
 }
 
-func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
+func (d *Backend) ListLocks() (map[string]locking.Run, error) {
 	params := &dynamodb.ScanInput{
 		TableName: aws.String(d.LockTable),
 	}
 
-	m := make(map[string]Run)
+	m := make(map[string]locking.Run)
 	var err, internalErr error
 	err = d.DB.ScanPages(params, func(out *dynamodb.ScanOutput, lastPage bool) bool {
 		var runs []dynamoRun
@@ -127,7 +128,7 @@ func (d *DynamoDBLockManager) ListLocks() (map[string]Run, error) {
 	return m, errors.Wrap(err, "scanning dynamodb")
 }
 
-func (d *DynamoDBLockManager) FindLocksForPull(repoFullName string, pullNum int) ([]string, error) {
+func (d *Backend) FindLocksForPull(repoFullName string, pullNum int) ([]string, error) {
 	params := &dynamodb.ScanInput{
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":pullNum": {
@@ -161,9 +162,9 @@ func (d *DynamoDBLockManager) FindLocksForPull(repoFullName string, pullNum int)
 	return ids, errors.Wrap(err,"scanning dynamodb")
 }
 
-func (d *DynamoDBLockManager) deserializeItem(item map[string]*dynamodb.AttributeValue) (string, Run, error) {
+func (d *Backend) deserializeItem(item map[string]*dynamodb.AttributeValue) (string, locking.Run, error) {
 	var lockID string
-	var run Run
+	var run locking.Run
 
 	lockIDItem, ok := item["LockID"]
 	if !ok || lockIDItem == nil {
@@ -181,15 +182,15 @@ func (d *DynamoDBLockManager) deserializeItem(item map[string]*dynamodb.Attribut
 	return lockID, run, nil
 }
 
-func (d *DynamoDBLockManager) deserialize(bs []byte, run *Run) error {
+func (d *Backend) deserialize(bs []byte, run *locking.Run) error {
 	return json.Unmarshal(bs, run)
 }
 
-func (d *DynamoDBLockManager) serialize(run Run) ([]byte, error) {
+func (d *Backend) serialize(run locking.Run) ([]byte, error) {
 	return json.Marshal(run)
 }
 
-func (d *DynamoDBLockManager) toDynamoItem(run Run) (map[string]*dynamodb.AttributeValue, error) {
+func (d *Backend) toDynamoItem(run locking.Run) (map[string]*dynamodb.AttributeValue, error) {
 	item := dynamoRun{
 		LockID: run.StateKey(),
 		PullNum: run.PullNum,
@@ -202,8 +203,8 @@ func (d *DynamoDBLockManager) toDynamoItem(run Run) (map[string]*dynamodb.Attrib
 	return dynamodbattribute.MarshalMap(item)
 }
 
-func (d *DynamoDBLockManager) fromDynamoItem(dynamoRun dynamoRun) Run {
-	return Run{
+func (d *Backend) fromDynamoItem(dynamoRun dynamoRun) locking.Run {
+	return locking.Run{
 		User: dynamoRun.User,
 		Timestamp: dynamoRun.Timestamp,
 		Path: dynamoRun.Path,

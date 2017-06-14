@@ -1,4 +1,4 @@
-package locking_test
+package boltdb_test
 
 import (
 	"github.com/hootsuite/atlantis/locking"
@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"time"
+	"github.com/hootsuite/atlantis/locking/boltdb"
 )
 
 var lockBucket = "bucket"
@@ -291,7 +292,7 @@ func TestFindMultipleMatching(t *testing.T) {
 }
 
 // newTestDB returns a TestDB using a temporary path.
-func newTestDB() (*bolt.DB, *locking.BoltDBLockManager) {
+func newTestDB() (*bolt.DB, *boltdb.Backend) {
 	// Retrieve a temporary path.
 	f, err := ioutil.TempFile("", "")
 	if err != nil {
@@ -313,7 +314,7 @@ func newTestDB() (*bolt.DB, *locking.BoltDBLockManager) {
 	}); err != nil {
 		panic(errors.Wrap(err, "could not create bucket"))
 	}
-	b, _ := locking.NewBoltDBLockManagerWithDB(db, lockBucket)
+	b, _ := boltdb.NewWithDB(db, lockBucket)
 	return db, b
 }
 

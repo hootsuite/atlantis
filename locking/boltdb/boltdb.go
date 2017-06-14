@@ -1,4 +1,4 @@
-package locking
+package boltdb
 
 import (
 	"github.com/boltdb/bolt"
@@ -9,14 +9,15 @@ import (
 	"os"
 	"time"
 	"path"
+	"github.com/hootsuite/atlantis/locking"
 )
 
-type BoltDBLockManager struct {
+type Backend struct {
 	db          *bolt.DB
 	locksBucket []byte
 }
 
-func NewBoltDBLockManager(dataDir string, locksBucket string) (*BoltDBLockManager, error) {
+func New(dataDir string, locksBucket string) (*Backend, error) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, errors.Wrap(err,"creating data dir")
 	}
@@ -37,16 +38,16 @@ func NewBoltDBLockManager(dataDir string, locksBucket string) (*BoltDBLockManage
 		return nil, errors.Wrap(err,"starting BoltDB")
 	}
 	// todo: close BoltDB when server is sigtermed
-	return &BoltDBLockManager{db, []byte(locksBucket)}, nil
+	return &Backend{db, []byte(locksBucket)}, nil
 }
 
-// NewBoltDBLockManagerWithDB is used for testing
-func NewBoltDBLockManagerWithDB(db *bolt.DB, locksBucket string) (*BoltDBLockManager, error) {
-	return &BoltDBLockManager{db, []byte(locksBucket)}, nil
+// NewWithDB is used for testing
+func NewWithDB(db *bolt.DB, locksBucket string) (*Backend, error) {
+	return &Backend{db, []byte(locksBucket)}, nil
 }
 
-func (b BoltDBLockManager) TryLock(run Run) (TryLockResponse, error) {
-	var response TryLockResponse
+func (b Backend) TryLock(run locking.Run) (locking.TryLockResponse, error) {
+	var response locking.TryLockResponse
 	newRunSerialized, _ := json.Marshal(run)
 	lockID := run.StateKey()
 	transactionErr := b.db.Update(func(tx *bolt.Tx) error {
@@ -56,7 +57,7 @@ func (b BoltDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 		lockingRunSerialized := locksBucket.Get([]byte(lockID))
 		if lockingRunSerialized == nil {
 			locksBucket.Put([]byte(lockID), newRunSerialized) // not a readonly bucket so okay to ignore error
-			response = TryLockResponse{
+			response = locking.TryLockResponse{
 				LockAcquired: true,
 				LockingRun:   run,
 				LockID:       lockID,
@@ -65,11 +66,11 @@ func (b BoltDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 		}
 
 		// otherwise the lock fails, return to caller the run that's holding the lock
-		var lockingRun Run
+		var lockingRun locking.Run
 		if err := b.deserialize(lockingRunSerialized, &lockingRun); err != nil {
 			return errors.Wrap(err, "failed to deserialize run")
 		}
-		response = TryLockResponse{
+		response = locking.TryLockResponse{
 			LockAcquired: false,
 			LockingRun: lockingRun,
 			LockID: lockID,
@@ -84,7 +85,7 @@ func (b BoltDBLockManager) TryLock(run Run) (TryLockResponse, error) {
 	return response, nil
 }
 
-func (b BoltDBLockManager) Unlock(lockID string) error {
+func (b Backend) Unlock(lockID string) error {
 	err := b.db.Update(func(tx *bolt.Tx) error {
 		locks := tx.Bucket(b.locksBucket)
 		return locks.Delete([]byte(lockID))
@@ -92,8 +93,8 @@ func (b BoltDBLockManager) Unlock(lockID string) error {
 	return errors.Wrap(err, "DB transaction failed")
 }
 
-func (b BoltDBLockManager) ListLocks() (map[string]Run, error) {
-	m := make(map[string]Run)
+func (b Backend) ListLocks() (map[string]locking.Run, error) {
+	m := make(map[string]locking.Run)
 	bytes := make(map[string][]byte)
 
 	err := b.db.View(func(tx *bolt.Tx) error {
@@ -110,7 +111,7 @@ func (b BoltDBLockManager) ListLocks() (map[string]Run, error) {
 
 	// deserialize bytes into the proper objects
 	for k, v := range bytes {
-		var run Run
+		var run locking.Run
 		if err := b.deserialize(v, &run); err != nil {
 			return m, errors.Wrap(err, fmt.Sprintf("failed to deserialize run at key %q", string(k)))
 		}
@@ -120,7 +121,7 @@ func (b BoltDBLockManager) ListLocks() (map[string]Run, error) {
 	return m, nil
 }
 
-func (b BoltDBLockManager) FindLocksForPull(repoFullName string, pullNum int) ([]string, error) {
+func (b Backend) FindLocksForPull(repoFullName string, pullNum int) ([]string, error) {
 	var ids []string
 	err := b.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(b.locksBucket).Cursor()
@@ -129,7 +130,7 @@ func (b BoltDBLockManager) FindLocksForPull(repoFullName string, pullNum int) ([
 		// and get the locks for that repo. Then we can check if the lock is for the right pull
 		prefix := []byte(repoFullName + "/")
 		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
-			var run Run
+			var run locking.Run
 			if err := b.deserialize(v, &run); err != nil {
 				return errors.Wrapf(err, "failed to deserialize run at key %q", string(k))
 			}
@@ -143,6 +144,6 @@ func (b BoltDBLockManager) FindLocksForPull(repoFullName string, pullNum int) ([
 	return ids, err
 }
 
-func (b BoltDBLockManager) deserialize(bs []byte, run *Run) error {
+func (b Backend) deserialize(bs []byte, run *locking.Run) error {
 	return json.Unmarshal(bs, run)
 }

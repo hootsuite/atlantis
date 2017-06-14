@@ -15,9 +15,9 @@ type Run struct {
 }
 
 const (
-	FileLockingBackend = "file"
-	DynamoDBLockingBackend = "dynamodb"
-	BoltDBRunLocksBucket   = "runLocks"
+	FileBackend          = "file"
+	DynamoDBBackend      = "dynamodb"
+	BoltDBRunLocksBucket = "runLocks"
 )
 
 // StateKey returns the unique key to identify the set of infrastructure being modified by this run.
@@ -33,7 +33,7 @@ type TryLockResponse struct {
 	LockID       string
 }
 
-type LockManager interface {
+type Backend interface {
 	TryLock(run Run) (TryLockResponse, error)
 	Unlock(lockID string) error
 	ListLocks() (map[string]Run, error)
