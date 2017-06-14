@@ -54,17 +54,17 @@ type ServerConfig struct {
 	GitHubUser      string `mapstructure:"gh-user"`
 	GitHubPassword  string `mapstructure:"gh-password"`
 	SSHKey          string `mapstructure:"ssh-key"`
-	AssumeRole      string `mapstructure:"aws-assume-role-arn"`
-	Port            int    `mapstructure:"port"`
-	ScratchDir      string `mapstructure:"scratch-dir"`
-	AWSRegion       string `mapstructure:"aws-region"`
-	S3Bucket        string `mapstructure:"s3-bucket"`
-	LogLevel        string `mapstructure:"log-level"`
-	AtlantisURL     string `mapstructure:"atlantis-url"`
-	RequireApproval bool   `mapstructure:"require-approval"`
-	DataDir         string `mapstructure:"data-dir"`
-	LockingBackend  string `mapstructure:"locking-backend"`
-	LockingTable    string `mapstructure:"locking-table"`
+	AssumeRole           string `mapstructure:"aws-assume-role-arn"`
+	Port                 int    `mapstructure:"port"`
+	ScratchDir           string `mapstructure:"scratch-dir"`
+	AWSRegion            string `mapstructure:"aws-region"`
+	S3Bucket             string `mapstructure:"s3-bucket"`
+	LogLevel             string `mapstructure:"log-level"`
+	AtlantisURL          string `mapstructure:"atlantis-url"`
+	RequireApproval      bool   `mapstructure:"require-approval"`
+	DataDir              string `mapstructure:"data-dir"`
+	LockingBackend       string `mapstructure:"locking-backend"`
+	LockingDynamoDBTable string `mapstructure:"locking-dynamodb-table"`
 }
 
 type ExecutionContext struct {
@@ -108,7 +108,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "creating aws session for DynamoDB")
 		}
-		lockManager = dynamodb.New(config.LockingTable, session)
+		lockManager = dynamodb.New(config.LockingDynamoDBTable, session)
 	} else {
 		var err error
 		lockManager, err = boltdb.New(config.DataDir, locking.BoltDBRunLocksBucket)

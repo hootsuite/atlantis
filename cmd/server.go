@@ -30,7 +30,7 @@ const (
 	atlantisURLFlag     = "atlantis-url"
 	dataDirFlag         = "data-dir"
 	lockingBackendFlag  = "locking-backend"
-	lockingTableFlag    = "locking-table"
+	lockingTableFlag    = "locking-dynamodb-table"
 )
 
 var stringFlags = []stringFlag{
