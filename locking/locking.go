@@ -14,12 +14,6 @@ type Run struct {
 	Timestamp  time.Time
 }
 
-const (
-	FileBackend          = "file"
-	DynamoDBBackend      = "dynamodb"
-	BoltDBRunLocksBucket = "runLocks"
-)
-
 // StateKey returns the unique key to identify the set of infrastructure being modified by this run.
 // Returns `{fullRepoName}/{tfProjectPath}/{environment}`.
 // Used in locking to determine what part of the infrastructure is locked.

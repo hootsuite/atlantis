@@ -14,10 +14,12 @@ import (
 
 type Backend struct {
 	db          *bolt.DB
-	locksBucket []byte
+	bucket []byte
 }
 
-func New(dataDir string, locksBucket string) (*Backend, error) {
+const bucketName = "runLocks"
+
+func New(dataDir string) (*Backend, error) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, errors.Wrap(err,"creating data dir")
 	}
@@ -29,8 +31,8 @@ func New(dataDir string, locksBucket string) (*Backend, error) {
 		return nil, errors.Wrap(err,"starting BoltDB")
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte(locksBucket)); err != nil {
-			return errors.Wrapf(err, "creating %q bucket", locksBucket)
+		if _, err := tx.CreateBucketIfNotExists([]byte(bucketName)); err != nil {
+			return errors.Wrapf(err, "creating %q bucketName", bucketName)
 		}
 		return nil
 	})
@@ -38,12 +40,12 @@ func New(dataDir string, locksBucket string) (*Backend, error) {
 		return nil, errors.Wrap(err,"starting BoltDB")
 	}
 	// todo: close BoltDB when server is sigtermed
-	return &Backend{db, []byte(locksBucket)}, nil
+	return &Backend{db, []byte(bucketName)}, nil
 }
 
 // NewWithDB is used for testing
-func NewWithDB(db *bolt.DB, locksBucket string) (*Backend, error) {
-	return &Backend{db, []byte(locksBucket)}, nil
+func NewWithDB(db *bolt.DB, bucket string) (*Backend, error) {
+	return &Backend{db, []byte(bucket)}, nil
 }
 
 func (b Backend) TryLock(run locking.Run) (locking.TryLockResponse, error) {
@@ -51,12 +53,12 @@ func (b Backend) TryLock(run locking.Run) (locking.TryLockResponse, error) {
 	newRunSerialized, _ := json.Marshal(run)
 	lockID := run.StateKey()
 	transactionErr := b.db.Update(func(tx *bolt.Tx) error {
-		locksBucket := tx.Bucket(b.locksBucket)
+		bucket := tx.Bucket(b.bucket)
 
 		// if there is no run at that key then we're free to create the lock
-		lockingRunSerialized := locksBucket.Get([]byte(lockID))
+		lockingRunSerialized := bucket.Get([]byte(lockID))
 		if lockingRunSerialized == nil {
-			locksBucket.Put([]byte(lockID), newRunSerialized) // not a readonly bucket so okay to ignore error
+			bucket.Put([]byte(lockID), newRunSerialized) // not a readonly bucketName so okay to ignore error
 			response = locking.TryLockResponse{
 				LockAcquired: true,
 				LockingRun:   run,
@@ -87,7 +89,7 @@ func (b Backend) TryLock(run locking.Run) (locking.TryLockResponse, error) {
 
 func (b Backend) Unlock(lockID string) error {
 	err := b.db.Update(func(tx *bolt.Tx) error {
-		locks := tx.Bucket(b.locksBucket)
+		locks := tx.Bucket(b.bucket)
 		return locks.Delete([]byte(lockID))
 	})
 	return errors.Wrap(err, "DB transaction failed")
@@ -98,7 +100,7 @@ func (b Backend) ListLocks() (map[string]locking.Run, error) {
 	bytes := make(map[string][]byte)
 
 	err := b.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(b.locksBucket)
+		bucket := tx.Bucket(b.bucket)
 		c := bucket.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			bytes[string(k)] = v
@@ -124,7 +126,7 @@ func (b Backend) ListLocks() (map[string]locking.Run, error) {
 func (b Backend) FindLocksForPull(repoFullName string, pullNum int) ([]string, error) {
 	var ids []string
 	err := b.db.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(b.locksBucket).Cursor()
+		c := tx.Bucket(b.bucket).Cursor()
 
 		// the key for each lock is repoFullName/path/env so we can scan through all entries
 		// and get the locks for that repo. Then we can check if the lock is for the right pull

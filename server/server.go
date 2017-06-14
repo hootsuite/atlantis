@@ -26,7 +26,9 @@ import (
 )
 
 const (
-	deleteLockRoute = "delete-lock"
+	deleteLockRoute        = "delete-lock"
+	LockingFileBackend     = "file"
+	LockingDynamoDBBackend = "dynamodb"
 )
 
 // WebhookServer listens for Github webhooks and runs the necessary Atlantis command
@@ -44,7 +46,7 @@ type Server struct {
 	logger           *logging.SimpleLogger
 	githubComments   *GithubCommentRenderer
 	requestParser    *RequestParser
-	lockManager      locking.Backend
+	lockingBackend   locking.Backend
 	atlantisURL      string
 }
 
@@ -102,16 +104,16 @@ func NewServer(config ServerConfig) (*Server, error) {
 		AWSRegion:  config.AWSRegion,
 		AWSRoleArn: config.AssumeRole,
 	}
-	var lockManager locking.Backend
-	if config.LockingBackend == locking.DynamoDBBackend {
+	var lockingBackend locking.Backend
+	if config.LockingBackend == LockingDynamoDBBackend {
 		session, err := awsConfig.CreateAWSSession()
 		if err != nil {
 			return nil, errors.Wrap(err, "creating aws session for DynamoDB")
 		}
-		lockManager = dynamodb.New(config.LockingDynamoDBTable, session)
+		lockingBackend = dynamodb.New(config.LockingDynamoDBTable, session)
 	} else {
 		var err error
-		lockManager, err = boltdb.New(config.DataDir, locking.BoltDBRunLocksBucket)
+		lockingBackend, err = boltdb.New(config.DataDir)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +127,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		ghComments:            githubComments,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
-		lockingBackend:        lockManager,
+		lockingBackend:        lockingBackend,
 	}
 	applyExecutor := &ApplyExecutor{BaseExecutor: baseExecutor, requireApproval: config.RequireApproval, atlantisGithubUser: config.GitHubUser}
 	planExecutor := &PlanExecutor{BaseExecutor: baseExecutor}
@@ -146,8 +148,8 @@ func NewServer(config ServerConfig) (*Server, error) {
 		logger:           logger,
 		githubComments:   githubComments,
 		requestParser:    &RequestParser{},
-		lockManager:      lockManager,
-		atlantisURL:       config.AtlantisURL,
+		lockingBackend:   lockingBackend,
+		atlantisURL:      config.AtlantisURL,
 	}, nil
 }
 
@@ -183,7 +185,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
-	locks, err := s.lockManager.ListLocks()
+	locks, err := s.lockingBackend.ListLocks()
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprintf(w, "Could not retrieve locks: %s", err)
@@ -216,7 +218,7 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "invalid lock id")
 	}
-	if err := s.lockManager.Unlock(idUnencoded); err != nil {
+	if err := s.lockingBackend.Unlock(idUnencoded); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "Failed to unlock: %s", err)
 		return
@@ -255,7 +257,7 @@ func (s *Server) postHooks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.PullRequestEvent, githubReqID string) {
 	repo := *pullEvent.Repo.FullName
 	pullNum := *pullEvent.PullRequest.Number
-	locks, err := s.lockManager.FindLocksForPull(repo, pullNum)
+	locks, err := s.lockingBackend.FindLocksForPull(repo, pullNum)
 	if err != nil {
 		s.logger.Err("finding locks for repo %s pull %d: %s", repo, pullNum, err)
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -266,7 +268,7 @@ func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.P
 	s.logger.Debug("Unlocking locks %v %s", locks, githubReqID)
 	var errors []error
 	for _, l := range locks {
-		if err := s.lockManager.Unlock(l); err != nil {
+		if err := s.lockingBackend.Unlock(l); err != nil {
 			errors = append(errors, err)
 		}
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
-	"github.com/hootsuite/atlantis/locking"
 )
 
 // To add a new flag you must
@@ -209,8 +208,8 @@ func validate(config server.ServerConfig) error {
 	if config.GitHubPassword == "" {
 		return fmt.Errorf("%s must be set", ghPasswordFlag)
 	}
-	if config.LockingBackend != locking.FileBackend && config.LockingBackend != locking.DynamoDBBackend {
-		return fmt.Errorf("unsupported locking backend %q: not one of %q or %q", config.LockingBackend, locking.FileBackend, locking.DynamoDBBackend)
+	if config.LockingBackend != server.LockingFileBackend && config.LockingBackend != server.LockingDynamoDBBackend {
+		return fmt.Errorf("unsupported locking backend %q: not one of %q or %q", config.LockingBackend, server.LockingFileBackend, server.LockingDynamoDBBackend)
 	}
 	return nil
 }
