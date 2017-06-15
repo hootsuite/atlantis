@@ -24,6 +24,7 @@ import (
 	"github.com/hootsuite/atlantis/locking/dynamodb"
 	"github.com/hootsuite/atlantis/locking/boltdb"
 	"github.com/hootsuite/atlantis/models"
+	"path/filepath"
 )
 
 const (
@@ -92,6 +93,54 @@ type CommentContext struct {
 	User models.User
 }
 
+type PullRequestContext struct {
+	repoFullName          string
+	head                  string
+	base                  string
+	number                int
+	pullRequestLink       string
+	terraformApplier      string
+	terraformApplierEmail string
+}
+
+type ExecutionResult struct {
+	SetupError   Templater
+	SetupFailure Templater
+	PathResults  []PathResult
+	Command      CommandType
+}
+
+type PathResult struct {
+	Path   string
+	Status string // todo: this should be an enum for success/error/failure
+	Result Templater
+}
+
+type ExecutionPath struct {
+	// Absolute is the full path on the OS where we will execute.
+	// Will never end with a '/'.
+	Absolute string
+	// Relative is the path relative to the repo root.
+	// Will never end with a '/'.
+	Relative string
+}
+
+func NewExecutionPath(absolutePath string, relativePath string) ExecutionPath {
+	return ExecutionPath{filepath.Clean(absolutePath), filepath.Clean(relativePath)}
+}
+
+type Templater interface {
+	Template() *CompiledTemplate
+}
+
+type GeneralError struct {
+	Error error
+}
+
+func (g GeneralError) Template() *CompiledTemplate {
+	return GeneralErrorTmpl
+}
+
 func NewServer(config ServerConfig) (*Server, error) {
 	tp := github.BasicAuthTransport{
 		Username: strings.TrimSpace(config.GitHubUser),
@@ -127,20 +176,28 @@ func NewServer(config ServerConfig) (*Server, error) {
 			return nil, err
 		}
 	}
-	baseExecutor := BaseExecutor{
+	applyExecutor := &ApplyExecutor{
 		github:                githubClient,
 		awsConfig:             awsConfig,
 		scratchDir:            config.ScratchDir,
 		s3Bucket:              config.S3Bucket,
 		sshKey:                config.SSHKey,
-		ghComments:            githubComments,
+		terraform:             terraformClient,
+		githubCommentRenderer: githubComments,
+		lockingBackend:        lockingBackend,
+		requireApproval: config.RequireApproval,
+	}
+	planExecutor := &PlanExecutor{
+		github:                githubClient,
+		awsConfig:             awsConfig,
+		scratchDir:            config.ScratchDir,
+		s3Bucket:              config.S3Bucket,
+		sshKey:                config.SSHKey,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
 		lockingBackend:        lockingBackend,
 	}
-	applyExecutor := &ApplyExecutor{BaseExecutor: baseExecutor, requireApproval: config.RequireApproval, atlantisGithubUser: config.GitHubUser}
-	planExecutor := &PlanExecutor{BaseExecutor: baseExecutor}
-	helpExecutor := &HelpExecutor{BaseExecutor: baseExecutor}
+	helpExecutor := &HelpExecutor{}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	router := mux.NewRouter()
 	return &Server{
@@ -332,9 +389,9 @@ func (s *Server) executeCommand(ctx *ExecutionContext) {
 
 	switch ctx.command.commandType {
 	case Plan:
-		s.planExecutor.Exec(s.planExecutor.execute, ctx, s.githubClient)
+		s.planExecutor.execute(ctx, s.githubClient)
 	case Apply:
-		s.applyExecutor.Exec(s.applyExecutor.execute, ctx, s.githubClient)
+		s.applyExecutor.execute(ctx, s.githubClient)
 	case Help:
 		s.helpExecutor.execute(ctx, s.githubClient)
 	default:

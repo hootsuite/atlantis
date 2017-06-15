@@ -15,7 +15,14 @@ import (
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and Github
 type PlanExecutor struct {
-	BaseExecutor
+	github                *GithubClient
+	awsConfig             *AWSConfig
+	scratchDir            string
+	s3Bucket              string
+	sshKey                string
+	terraform             *TerraformClient
+	githubCommentRenderer *GithubCommentRenderer
+	lockingBackend        locking.Backend
 	// DeleteLockURL is a function that given a lock id will return a url for deleting the lock
 	DeleteLockURL func(id string) (url string)
 }
@@ -61,10 +68,12 @@ func (e EnvironmentFailure) Template() *CompiledTemplate {
 	return EnvironmentErrorTmpl
 }
 
-func (p *PlanExecutor) execute(ctx *ExecutionContext, pullCtx *PullRequestContext) ExecutionResult {
+func (p *PlanExecutor) execute(ctx *ExecutionContext, github *GithubClient) {
+	pullCtx := p.githubContext(ctx)
 	res := p.setupAndPlan(ctx, pullCtx)
 	res.Command = Plan
-	return res
+	comment := p.githubCommentRenderer.render(res, ctx.log.History.String(), ctx.command.verbose)
+	github.CreateComment(pullCtx, comment)
 }
 
 func (p *PlanExecutor) setupAndPlan(ctx *ExecutionContext, pullCtx *PullRequestContext) ExecutionResult {
@@ -442,4 +451,40 @@ func (p *PlanExecutor) GenerateOutputFilename(repoDir string, execPath Execution
 
 func generateStatePath(path string, tfEnvName string) string {
 	return strings.Replace(path, "$ENVIRONMENT", tfEnvName, -1)
+}
+
+func (p *PlanExecutor) updateGithubStatus(pullCtx *PullRequestContext, pathResults []PathResult) {
+	// the status will be the worst result
+	worstResult := p.worstResult(pathResults)
+	if worstResult == "success" {
+		p.github.UpdateStatus(pullCtx, SuccessStatus, "Plan Succeeded")
+	} else if worstResult == "failure" {
+		p.github.UpdateStatus(pullCtx, FailureStatus, "Plan Failed")
+	} else {
+		p.github.UpdateStatus(pullCtx, ErrorStatus, "Plan Error")
+	}
+}
+
+func (p *PlanExecutor) githubContext(ctx *ExecutionContext) *PullRequestContext {
+	return &PullRequestContext{
+		repoFullName:          ctx.repoFullName,
+		head:                  ctx.head,
+		base:                  ctx.base,
+		number:                ctx.pullNum,
+		pullRequestLink:       ctx.pullLink,
+		terraformApplier:      ctx.requesterUsername,
+		terraformApplierEmail: ctx.requesterEmail,
+	}
+}
+
+func (p *PlanExecutor) worstResult(results []PathResult) string {
+	var worst string = "success"
+	for _, result := range results {
+		if result.Status == "error" {
+			return result.Status
+		} else if result.Status == "failure" {
+			worst = result.Status
+		}
+	}
+	return worst
 }

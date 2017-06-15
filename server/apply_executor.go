@@ -18,9 +18,15 @@ import (
 )
 
 type ApplyExecutor struct {
-	BaseExecutor
+	github                *GithubClient
+	awsConfig             *AWSConfig
+	scratchDir            string
+	s3Bucket              string
+	sshKey                string
+	terraform             *TerraformClient
+	githubCommentRenderer *GithubCommentRenderer
+	lockingBackend        locking.Backend
 	requireApproval    bool
-	atlantisGithubUser string
 }
 
 /** Result Types **/
@@ -54,10 +60,12 @@ func (n NoPlansFailure) Template() *CompiledTemplate {
 	return NoPlansFailureTmpl
 }
 
-func (a *ApplyExecutor) execute(ctx *ExecutionContext, pullCtx *PullRequestContext) ExecutionResult {
+func (a *ApplyExecutor) execute(ctx *ExecutionContext, github *GithubClient) {
+	pullCtx := a.githubContext(ctx)
 	res := a.setupAndApply(ctx, pullCtx)
 	res.Command = Apply
-	return res
+	comment := a.githubCommentRenderer.render(res, ctx.log.History.String(), ctx.command.verbose)
+	github.CreateComment(pullCtx, comment)
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *ExecutionContext, pullCtx *PullRequestContext) ExecutionResult {
@@ -291,4 +299,40 @@ func (a *ApplyExecutor) determinePlanSubDir(planName string, pullNum int) string
 	}
 	dirsStr := match[1] // in form dir_subdir_subsubdir
 	return filepath.Clean(strings.Replace(dirsStr, "_", "/", -1))
+}
+
+func (a *ApplyExecutor) githubContext(ctx *ExecutionContext) *PullRequestContext {
+	return &PullRequestContext{
+		repoFullName:          ctx.repoFullName,
+		head:                  ctx.head,
+		base:                  ctx.base,
+		number:                ctx.pullNum,
+		pullRequestLink:       ctx.pullLink,
+		terraformApplier:      ctx.requesterUsername,
+		terraformApplierEmail: ctx.requesterEmail,
+	}
+}
+
+func (a *ApplyExecutor) updateGithubStatus(pullCtx *PullRequestContext, pathResults []PathResult) {
+	// the status will be the worst result
+	worstResult := a.worstResult(pathResults)
+	if worstResult == "success" {
+		a.github.UpdateStatus(pullCtx, SuccessStatus, "Apply Succeeded")
+	} else if worstResult == "failure" {
+		a.github.UpdateStatus(pullCtx, FailureStatus, "Apply Failed")
+	} else {
+		a.github.UpdateStatus(pullCtx, ErrorStatus, "Apply Error")
+	}
+}
+
+func (a *ApplyExecutor) worstResult(results []PathResult) string {
+	var worst string = "success"
+	for _, result := range results {
+		if result.Status == "error" {
+			return result.Status
+		} else if result.Status == "failure" {
+			worst = result.Status
+		}
+	}
+	return worst
 }

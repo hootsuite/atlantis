@@ -14,6 +14,13 @@ type Run struct {
 	Timestamp  time.Time
 }
 
+//type ProjectLock struct {
+//	Project Project
+//	Pull Pull
+//	User User
+//	Timestamp time.Time
+//}
+
 // StateKey returns the unique key to identify the set of infrastructure being modified by this run.
 // Returns `{fullRepoName}/{tfProjectPath}/{environment}`.
 // Used in locking to determine what part of the infrastructure is locked.

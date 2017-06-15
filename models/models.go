@@ -2,15 +2,9 @@ package models
 
 import "time"
 
-type TFProject struct {
-	RepoFullName string // could just have Repo object
-	Path         string
-}
-
-type Run struct {
-	TFProject   TFProject
-	Environment string
-	PullNum     int
+type Project struct {
+	Repo Repo
+	Path string
 }
 
 type Repo struct {
@@ -32,8 +26,8 @@ type User struct {
 	Email    string
 }
 
-type Lock struct {
-	Run Run
-	User User
+type ProjectLock struct {
+	Project Project
+	Pull PullRequest
 	Time time.Time
 }
