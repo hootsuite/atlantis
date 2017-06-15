@@ -30,18 +30,8 @@ atlantis apply staging
 atlantis apply
 `
 
-func (h *HelpExecutor) execute(ctx *ExecutionContext, github *GithubClient) {
-	pullCtx := &PullRequestContext{
-		repoFullName:          ctx.repoFullName,
-		head:                  ctx.head,
-		base:                  ctx.base,
-		number:                ctx.pullNum,
-		pullRequestLink:       ctx.pullLink,
-		terraformApplier:      ctx.requesterUsername,
-		terraformApplierEmail: ctx.requesterEmail,
-	}
-	github.CreateComment(pullCtx, helpComment)
-
+func (h *HelpExecutor) execute(ctx *CommandContext, github *GithubClient) {
 	ctx.log.Info("generating help comment....")
+	github.CreateComment(ctx, helpComment)
 	return
 }

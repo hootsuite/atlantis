@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"github.com/hootsuite/atlantis/locking/dynamodb"
 	"github.com/hootsuite/atlantis/locking/boltdb"
-	"github.com/hootsuite/atlantis/models"
 	"path/filepath"
 )
 
@@ -33,7 +32,7 @@ const (
 	LockingDynamoDBBackend = "dynamodb"
 )
 
-// WebhookServer listens for Github webhooks and runs the necessary Atlantis command
+// Server listens for Github webhooks and runs the necessary Atlantis command
 type Server struct {
 	router           *mux.Router
 	port             int
@@ -71,36 +70,12 @@ type ServerConfig struct {
 	LockingDynamoDBTable string `mapstructure:"locking-dynamodb-table"`
 }
 
-type ExecutionContext struct {
-	repoFullName      string
-	pullNum           int
-	requesterUsername string
-	requesterEmail    string
-	repoSSHUrl        string
-	head              string
-	// commit base sha
-	base              string
-	pullLink          string
-	branch            string
-	pullCreator       string
-	command           *Command
+type CommandContext struct {
+	Repo Repo
+	Pull PullRequest
+	User User
+	Command     *Command
 	log         *logging.SimpleLogger
-}
-
-type CommentContext struct {
-	Repo models.Repo
-	PullRequest models.PullRequest
-	User models.User
-}
-
-type PullRequestContext struct {
-	repoFullName          string
-	head                  string
-	base                  string
-	number                int
-	pullRequestLink       string
-	terraformApplier      string
-	terraformApplierEmail string
 }
 
 type ExecutionResult struct {
@@ -351,14 +326,14 @@ func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.P
 
 func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github.IssueCommentEvent, githubReqID string) {
 	// determine if the comment matches a plan or apply command
-	ctx := &ExecutionContext{}
+	ctx := &CommandContext{}
 	command, err := s.requestParser.determineCommand(&comment)
 	if err != nil {
 		s.logger.Debug("Ignoring request: %v %s", err, githubReqID)
 		fmt.Fprintln(w, "Ignoring")
 		return
 	}
-	ctx.command = command
+	ctx.Command = command
 
 	if err = s.requestParser.extractCommentData(&comment, ctx); err != nil {
 		s.logger.Err("Failed parsing event: %v %s", err, githubReqID)
@@ -370,14 +345,14 @@ func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github
 	go s.executeCommand(ctx)
 }
 
-func (s *Server) executeCommand(ctx *ExecutionContext) {
-	src := fmt.Sprintf("%s/pull/%d", ctx.repoFullName, ctx.pullNum)
+func (s *Server) executeCommand(ctx *CommandContext) {
+	src := fmt.Sprintf("%s/pull/%d", ctx.Repo.FullName, ctx.Pull.Num)
 	// it's safe to reuse the underlying logger s.logger.Log
 	ctx.log = logging.NewSimpleLogger(src, s.logger.Log, true, s.logger.Level)
 	defer s.recover(ctx)
 
 	// we've got data from the comment, now we need to get data from the actual PR
-	pull, _, err := s.githubClient.GetPullRequest(ctx.repoFullName, ctx.pullNum)
+	pull, _, err := s.githubClient.GetPullRequest(ctx.Repo, ctx.Pull.Num)
 	if err != nil {
 		ctx.log.Err("pull request data api call failed: %v", err)
 		return
@@ -387,7 +362,7 @@ func (s *Server) executeCommand(ctx *ExecutionContext) {
 		return
 	}
 
-	switch ctx.command.commandType {
+	switch ctx.Command.commandType {
 	case Plan:
 		s.planExecutor.execute(ctx, s.githubClient)
 	case Apply:
@@ -408,11 +383,10 @@ func (s *Server) isPullClosedEvent(event github.PullRequestEvent) bool {
 }
 
 // recover logs and creates a comment on the pull request for panics
-func (s *Server) recover(ctx *ExecutionContext) {
+func (s *Server) recover(ctx *CommandContext) {
 	if err := recover(); err != nil {
-		ghCtx := s.planExecutor.githubContext(ctx) // this won't have every field but it has the ones needed by CreateComment
 		stack := recovery.Stack(3)
-		s.githubClient.CreateComment(ghCtx, fmt.Sprintf("**Error: goroutine panic. This is a bug.**\n```\n%s\n%s```", err, stack))
+		s.githubClient.CreateComment(ctx, fmt.Sprintf("**Error: goroutine panic. This is a bug.**\n```\n%s\n%s```", err, stack))
 		ctx.log.Err("PANIC: %s\n%s", err, stack)
 	}
 }

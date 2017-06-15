@@ -1,4 +1,4 @@
-package models
+package server
 
 import "time"
 
@@ -9,6 +9,8 @@ type Project struct {
 
 type Repo struct {
 	FullName string
+	Owner string
+	Name string
 	SSHURL string
 }
 
@@ -23,7 +25,6 @@ type PullRequest struct {
 
 type User struct {
 	Username string
-	Email    string
 }
 
 type ProjectLock struct {
