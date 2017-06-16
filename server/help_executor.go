@@ -31,7 +31,7 @@ atlantis apply
 `
 
 func (h *HelpExecutor) execute(ctx *CommandContext, github *GithubClient) {
-	ctx.log.Info("generating help comment....")
+	ctx.Log.Info("generating help comment....")
 	github.CreateComment(ctx, helpComment)
 	return
 }

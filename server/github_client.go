@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/go-github/github"
 	"context"
+	"github.com/hootsuite/atlantis/models"
 )
 
 type GithubClient struct {
@@ -19,14 +20,16 @@ const (
 	FailureStatus = "failure"
 )
 
-func (g *GithubClient) UpdateStatus(repo Repo, pull PullRequest, status string, description string) {
+func (g *GithubClient) UpdateStatus(repo models.Repo, pull models.PullRequest, status string, description string) {
 	repoStatus := github.RepoStatus{State: github.String(status), Description: github.String(description), Context: github.String(statusContext)}
 	g.client.Repositories.CreateStatus(g.ctx, repo.Owner, repo.Name, pull.HeadCommit, &repoStatus)
 	// todo: deal with error updating status
 }
 
-func (g *GithubClient) GetModifiedFiles(repo Repo, pull PullRequest) ([]string, error) {
-	var files = []string{}
+// GetModifiedFiles returns the names of files that were modified in the pull request.
+// The names include the path to the file from the repo root, ex. parent/child/file.txt
+func (g *GithubClient) GetModifiedFiles(repo models.Repo, pull models.PullRequest) ([]string, error) {
+	var files []string
 	comparison, _, err := g.client.Repositories.CompareCommits(g.ctx, repo.Owner, repo.Name, pull.BaseCommit, pull.HeadCommit)
 	if err != nil {
 		return files, err
@@ -42,7 +45,7 @@ func (g *GithubClient) CreateComment(ctx *CommandContext, comment string) error 
 	return err
 }
 
-func (g *GithubClient) PullIsApproved(repo Repo, pull PullRequest) (bool, error) {
+func (g *GithubClient) PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error) {
 	// todo: move back to using g.client.PullRequests.ListReviews when we update our GitHub enterprise version
 	// to where we don't need to include the custom accept header
 	u := fmt.Sprintf("repos/%v/%v/pulls/%d/reviews", repo.Owner, repo.Name, pull.Num)
@@ -65,6 +68,6 @@ func (g *GithubClient) PullIsApproved(repo Repo, pull PullRequest) (bool, error)
 	return false, nil
 }
 
-func (g *GithubClient) GetPullRequest(repo Repo, num int) (*github.PullRequest, *github.Response, error) {
+func (g *GithubClient) GetPullRequest(repo models.Repo, num int) (*github.PullRequest, *github.Response, error) {
 	return g.client.PullRequests.Get(g.ctx, repo.Owner, repo.Name, num)
 }

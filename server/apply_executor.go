@@ -14,7 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hootsuite/atlantis/locking"
-	"time"
+	"github.com/hootsuite/atlantis/models"
+	"strconv"
 )
 
 type ApplyExecutor struct {
@@ -25,8 +26,8 @@ type ApplyExecutor struct {
 	sshKey                string
 	terraform             *TerraformClient
 	githubCommentRenderer *GithubCommentRenderer
-	lockingBackend        locking.Backend
-	requireApproval    bool
+	lockingClient         *locking.Client
+	requireApproval       bool
 }
 
 /** Result Types **/
@@ -63,7 +64,7 @@ func (n NoPlansFailure) Template() *CompiledTemplate {
 func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
 	res := a.setupAndApply(ctx)
 	res.Command = Apply
-	comment := a.githubCommentRenderer.render(res, ctx.log.History.String(), ctx.Command.verbose)
+	comment := a.githubCommentRenderer.render(res, ctx.Log.History.String(), ctx.Command.verbose)
 	github.CreateComment(ctx, comment)
 }
 
@@ -74,12 +75,12 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 		ok, err := a.github.PullIsApproved(ctx.Repo, ctx.Pull)
 		if err != nil {
 			msg := fmt.Sprintf("failed to determine if pull request was approved: %v", err)
-			ctx.log.Err(msg)
+			ctx.Log.Err(msg)
 			a.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Apply Error")
 			return ExecutionResult{SetupError: GeneralError{errors.New(msg)}}
 		}
 		if !ok {
-			ctx.log.Info("pull request was not approved")
+			ctx.Log.Info("pull request was not approved")
 			a.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Apply Failed")
 			return ExecutionResult{SetupFailure: PullNotApprovedFailure{}}
 		}
@@ -88,7 +89,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 	planPaths, err := a.downloadPlans(ctx.Repo.FullName, ctx.Pull.Num, ctx.Command.environment, a.scratchDir, a.awsConfig, a.s3Bucket)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to download plans: %v", err)
-		ctx.log.Err(errMsg)
+		ctx.Log.Err(errMsg)
 		a.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Apply Error")
 		return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 	}
@@ -96,7 +97,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 	// If there are no plans found for the pull request
 	if len(planPaths) == 0 {
 		failure := "found 0 plans for this pull request"
-		ctx.log.Warn(failure)
+		ctx.Log.Warn(failure)
 		a.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Apply Failure")
 		return ExecutionResult{SetupFailure: NoPlansFailure{}}
 	}
@@ -115,27 +116,30 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 func (a *ApplyExecutor) apply(ctx *CommandContext, planPath string) PathResult {
 	planName := path.Base(planPath)
 	planSubDir := a.determinePlanSubDir(planName, ctx.Pull.Num)
-	planDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, fmt.Sprintf("%v", ctx.Pull.Num), planSubDir)
+	// todo: don't assume repo is cloned here
+	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num))
+	planDir := filepath.Join(repoDir, planSubDir)
+	project := models.NewProject(ctx.Repo.FullName, planSubDir)
 	execPath := NewExecutionPath(planDir, planSubDir)
 	var config Config
 	var remoteStatePath string
 	// check if config file is found, if not we continue the run
 	if config.Exists(execPath.Absolute) {
-		ctx.log.Info("Config file found in %s", execPath.Absolute)
+		ctx.Log.Info("Config file found in %s", execPath.Absolute)
 		err := config.Read(execPath.Absolute)
 		if err != nil {
 			msg := fmt.Sprintf("Error reading config file: %v", err)
-			ctx.log.Err(msg)
+			ctx.Log.Err(msg)
 			return PathResult{
 				Status: "error",
 				Result: GeneralError{errors.New(msg)},
 			}
 		}
 		// need to use the remote state path and backend to do remote configure
-		err = PreRun(&config, ctx.log, execPath.Absolute, ctx.Command)
+		err = PreRun(&config, ctx.Log, execPath.Absolute, ctx.Command)
 		if err != nil {
 			msg := fmt.Sprintf("pre run failed: %v", err)
-			ctx.log.Err(msg)
+			ctx.Log.Err(msg)
 			return PathResult{
 				Status: "error",
 				Result: GeneralError{errors.New(msg)},
@@ -152,10 +156,10 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, planPath string) PathResult {
 	// NOTE: THIS CODE IS TO SUPPORT TERRAFORM PROJECTS THAT AREN'T USING ATLANTIS CONFIG FILE.
 	if config.StashPath == "" {
 		// configure remote state
-		statePath, err := a.terraform.ConfigureRemoteState(ctx.log, execPath, ctx.Command.environment, a.sshKey)
+		statePath, err := a.terraform.ConfigureRemoteState(ctx.Log, repoDir, project, ctx.Command.environment, a.sshKey)
 		if err != nil {
 			msg := fmt.Sprintf("failed to set up remote state: %v", err)
-			ctx.log.Err(msg)
+			ctx.Log.Err(msg)
 			return PathResult{
 				Status: "error",
 				Result: GeneralError{errors.New(msg)},
@@ -172,26 +176,18 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, planPath string) PathResult {
 		if tfEnv == "" {
 			tfEnv = "default"
 		}
-		run := locking.Run{
-			RepoFullName: ctx.Repo.FullName,
-			Path: execPath.Relative,
-			Env: tfEnv,
-			PullNum: ctx.Pull.Num,
-			User: ctx.User.Username,
-			Timestamp: time.Now(),
-		}
 
-		lockAttempt, err := a.lockingBackend.TryLock(run)
+		lockAttempt, err := a.lockingClient.TryLock(project, tfEnv, ctx.Pull.Num)
 		if err != nil {
 			return PathResult{
 				Status: "error",
 				Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
 			}
 		}
-		if lockAttempt.LockAcquired != true && lockAttempt.LockingRun.PullNum != ctx.Pull.Num {
+		if lockAttempt.LockAcquired != true && lockAttempt.LockingPullNum != ctx.Pull.Num {
 			return PathResult{
 				Status: "error",
-				Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.LockingRun.PullNum)},
+				Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.LockingPullNum)},
 			}
 		}
 	}
@@ -201,7 +197,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, planPath string) PathResult {
 	a.awsConfig.AWSSessionName = ctx.User.Username
 	awsSession, err := a.awsConfig.CreateAWSSession()
 	if err != nil {
-		ctx.log.Err(err.Error())
+		ctx.Log.Err(err.Error())
 		return PathResult{
 			Status: "error",
 			Result: GeneralError{err},
@@ -211,23 +207,23 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, planPath string) PathResult {
 	credVals, err := awsSession.Config.Credentials.Get()
 	if err != nil {
 		msg := fmt.Sprintf("failed to get assumed role credentials: %v", err)
-		ctx.log.Err(msg)
+		ctx.Log.Err(msg)
 		return PathResult{
 			Status: "error",
 			Result: GeneralError{errors.New(msg)},
 		}
 	}
 
-	ctx.log.Info("running apply from %q", execPath.Relative)
+	ctx.Log.Info("running apply from %q", execPath.Relative)
 
-	terraformApplyCmdArgs, output, err := a.terraform.RunTerraformCommand(execPath, []string{"apply", "-no-color", planPath}, []string{
+	terraformApplyCmdArgs, output, err := a.terraform.RunTerraformCommand(execPath.Absolute, []string{"apply", "-no-color", planPath}, []string{
 		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credVals.AccessKeyID),
 		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credVals.SecretAccessKey),
 		fmt.Sprintf("AWS_SESSION_TOKEN=%s", credVals.SessionToken),
 	})
 	//runLog = append(runLog, "```\n Apply output:\n", fmt.Sprintf("```bash\n%s\n", string(out[:])))
 	if err != nil {
-		ctx.log.Err("failed to apply: %v %s", err, output)
+		ctx.Log.Err("failed to apply: %v %s", err, output)
 		return PathResult{
 			Status: "failure",
 			Result: ApplyFailure{Command: strings.Join(terraformApplyCmdArgs, " "), Output: output, ErrorMessage: err.Error()},

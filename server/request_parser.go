@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/go-github/github"
 	"regexp"
+	"github.com/hootsuite/atlantis/models"
 )
 
 type RequestParser struct{}
@@ -99,16 +100,16 @@ func (r *RequestParser) extractCommentData(comment *github.IssueCommentEvent, ct
 	if htmlURL == nil {
 		return errors.New("key 'comment.issue.htmlUrl' is null")
 	}
-	ctx.Repo = Repo{
+	ctx.Repo = models.Repo{
 		FullName: *repoFullName,
 		Owner: *repoOwner,
 		Name: *repoName,
 		SSHURL: *repoSSHURL,
 	}
-	ctx.User = User{
+	ctx.User = models.User{
 		Username: *commentorUsername,
 	}
-	ctx.Pull = PullRequest{
+	ctx.Pull = models.PullRequest{
 		Num: *pullNum,
 	}
 
@@ -132,15 +133,15 @@ func (r *RequestParser) extractPullData(pull *github.PullRequest, params *Comman
 	if branch == nil {
 		return errors.New("key 'pull.head.ref' is null")
 	}
-	authorUsername := pull.User.Name
+	authorUsername := pull.User.Login
 	if authorUsername == nil {
-		return errors.New("key 'pull.user.name' is null")
+		return errors.New("key 'pull.user.login' is null")
 	}
 	num := pull.Number
 	if num == nil {
 		return errors.New("key 'pull.num' is null")
 	}
-	params.Pull = PullRequest{
+	params.Pull = models.PullRequest{
 		BaseCommit: *base,
 		Author: *authorUsername,
 		Branch: *branch,

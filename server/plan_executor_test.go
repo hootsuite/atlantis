@@ -17,7 +17,7 @@ func TestDetermineExecPaths(t *testing.T) {
 
 func runTest(t *testing.T, testDescrip string, repoPath string, filesChanged []string, expected []ExecutionPath) {
 	p := PlanExecutor{}
-	plans := p.DetermineExecPaths(repoPath, filesChanged)
+	plans := p.ModifiedProjects(repoPath, filesChanged)
 	if !reflect.DeepEqual(expected, plans) {
 		t.Errorf("%s: expected %v, got %v", testDescrip, expected, plans)
 	}
