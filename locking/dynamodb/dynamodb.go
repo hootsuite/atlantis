@@ -18,11 +18,17 @@ type Backend struct {
 	LockTable string
 }
 
-// dynamoLock is a ProjectLock with the LockKey included so it
-// gets serialized with DynamoDB properly
+// dynamoLock duplicates the fields of models.ProjectLock and adds LocksKey
+// so everything is a top-level field for serialization and then querying
+// in DynamodB and also so any changes to models.ProjectLock won't affect
+// how we're storing our data or will at least cause a compile error
 type dynamoLock struct {
 	LockKey string
-	models.ProjectLock
+	RepoFullName string
+	Path string
+	PullNum int
+	Env     string
+	Time    time.Time
 }
 
 func New(lockTable string, p client.ConfigProvider) Backend {
@@ -38,15 +44,13 @@ func (b Backend) key(project models.Project, env string) string {
 
 func (b Backend) TryLock(project models.Project, env string, pullNum int) (bool, int, error) {
 	key := b.key(project, env)
-	newLock := models.ProjectLock{
-		PullNum: pullNum,
-		Project: project,
-		Time:    time.Now(),
-		Env:     env,
-	}
 	newDynamoLock := dynamoLock{
-		key,
-		newLock,
+		LockKey: key,
+		RepoFullName: project.RepoFullName,
+		Path: project.Path,
+		PullNum: pullNum,
+		Env:     env,
+		Time:    time.Now(),
 	}
 	newLockSerialized, err := dynamodbattribute.MarshalMap(newDynamoLock)
 	if err != nil {
@@ -116,7 +120,12 @@ func (b Backend) List() ([]models.ProjectLock, error) {
 			return false
 		}
 		for _, lock := range dynamoLocks {
-			locks = append(locks, lock.ProjectLock)
+			locks = append(locks, models.ProjectLock{
+				PullNum: lock.PullNum,
+				Project: models.NewProject(lock.RepoFullName, lock.Path),
+				Env: lock.Env,
+				Time: lock.Time,
+			})
 		}
 		return lastPage
 	})
@@ -160,8 +169,8 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 
 	// now we can unlock all of them
 	for _, lock := range locks {
-		if err := b.Unlock(lock.Project, lock.Env); err != nil {
-			return errors.Wrapf(err,"unlocking repo %s, path %s, env %s", lock.Project.RepoFullName, lock.Project.Path, lock.Env)
+		if err := b.Unlock(models.NewProject(lock.RepoFullName, lock.Path), lock.Env); err != nil {
+			return errors.Wrapf(err,"unlocking repo %s, path %s, env %s", lock.RepoFullName, lock.Path, lock.Env)
 		}
 	}
 	return nil
