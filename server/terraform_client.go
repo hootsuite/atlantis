@@ -2,12 +2,12 @@ package server
 
 import (
 	"fmt"
+	"github.com/hootsuite/atlantis/logging"
+	"github.com/hootsuite/atlantis/models"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"github.com/hootsuite/atlantis/logging"
-	"github.com/hootsuite/atlantis/models"
 )
 
 type TerraformClient struct {

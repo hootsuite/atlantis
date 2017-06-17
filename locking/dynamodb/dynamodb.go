@@ -1,15 +1,15 @@
 package dynamodb
 
 import (
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/pkg/errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"strconv"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/hootsuite/atlantis/models"
+	"github.com/pkg/errors"
+	"strconv"
 	"time"
 )
 
@@ -23,12 +23,12 @@ type Backend struct {
 // in DynamodB and also so any changes to models.ProjectLock won't affect
 // how we're storing our data or will at least cause a compile error
 type dynamoLock struct {
-	LockKey string
+	LockKey      string
 	RepoFullName string
-	Path string
-	PullNum int
-	Env     string
-	Time    time.Time
+	Path         string
+	PullNum      int
+	Env          string
+	Time         time.Time
 }
 
 func New(lockTable string, p client.ConfigProvider) Backend {
@@ -45,12 +45,12 @@ func (b Backend) key(project models.Project, env string) string {
 func (b Backend) TryLock(project models.Project, env string, pullNum int) (bool, int, error) {
 	key := b.key(project, env)
 	newDynamoLock := dynamoLock{
-		LockKey: key,
+		LockKey:      key,
 		RepoFullName: project.RepoFullName,
-		Path: project.Path,
-		PullNum: pullNum,
-		Env:     env,
-		Time:    time.Now(),
+		Path:         project.Path,
+		PullNum:      pullNum,
+		Env:          env,
+		Time:         time.Now(),
 	}
 	newLockSerialized, err := dynamodbattribute.MarshalMap(newDynamoLock)
 	if err != nil {
@@ -64,7 +64,7 @@ func (b Backend) TryLock(project models.Project, env string, pullNum int) (bool,
 				S: aws.String(key),
 			},
 		},
-		TableName: aws.String(b.LockTable),
+		TableName:      aws.String(b.LockTable),
 		ConsistentRead: aws.Bool(true),
 	}
 	item, err := b.DB.GetItem(getItemParams)
@@ -76,7 +76,7 @@ func (b Backend) TryLock(project models.Project, env string, pullNum int) (bool,
 	var currLock dynamoLock
 	if len(item.Item) != 0 {
 		if err := dynamodbattribute.UnmarshalMap(item.Item, &currLock); err != nil {
-			return false, 0, errors.Wrap(err,"found an existing lock at that key but it could not be deserialized. We suggest manually deleting this key from DynamoDB")
+			return false, 0, errors.Wrap(err, "found an existing lock at that key but it could not be deserialized. We suggest manually deleting this key from DynamoDB")
 		}
 		return false, currLock.PullNum, nil
 	}
@@ -116,15 +116,15 @@ func (b Backend) List() ([]models.ProjectLock, error) {
 	err = b.DB.ScanPages(params, func(out *dynamodb.ScanOutput, lastPage bool) bool {
 		var dynamoLocks []dynamoLock
 		if err := dynamodbattribute.UnmarshalListOfMaps(out.Items, &dynamoLocks); err != nil {
-			internalErr = errors.Wrap(err,"deserializing locks")
+			internalErr = errors.Wrap(err, "deserializing locks")
 			return false
 		}
 		for _, lock := range dynamoLocks {
 			locks = append(locks, models.ProjectLock{
 				PullNum: lock.PullNum,
 				Project: models.NewProject(lock.RepoFullName, lock.Path),
-				Env: lock.Env,
-				Time: lock.Time,
+				Env:     lock.Env,
+				Time:    lock.Time,
 			})
 		}
 		return lastPage
@@ -147,7 +147,7 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 			},
 		},
 		FilterExpression: aws.String("RepoFullName = :repoFullName and PullNum = :pullNum"),
-		TableName: aws.String(b.LockTable),
+		TableName:        aws.String(b.LockTable),
 	}
 
 	// scan DynamoDB for locks that match the pull request
@@ -155,7 +155,7 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 	var err, internalErr error
 	err = b.DB.ScanPages(params, func(out *dynamodb.ScanOutput, lastPage bool) bool {
 		if err := dynamodbattribute.UnmarshalListOfMaps(out.Items, &locks); err != nil {
-			internalErr = errors.Wrap(err,"deserializing locks")
+			internalErr = errors.Wrap(err, "deserializing locks")
 			return false
 		}
 		return lastPage
@@ -170,7 +170,7 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 	// now we can unlock all of them
 	for _, lock := range locks {
 		if err := b.Unlock(models.NewProject(lock.RepoFullName, lock.Path), lock.Env); err != nil {
-			return errors.Wrapf(err,"unlocking repo %s, path %s, env %s", lock.RepoFullName, lock.Path, lock.Env)
+			return errors.Wrapf(err, "unlocking repo %s, path %s, env %s", lock.RepoFullName, lock.Path, lock.Env)
 		}
 	}
 	return nil

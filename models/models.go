@@ -1,15 +1,15 @@
 package models
 
 import (
-	"time"
 	paths "path"
+	"time"
 )
 
 type Repo struct {
 	FullName string
-	Owner string
-	Name string
-	SSHURL string
+	Owner    string
+	Name     string
+	SSHURL   string
 }
 
 type PullRequest struct {
@@ -49,6 +49,6 @@ func NewProject(repoFullName string, path string) Project {
 	}
 	return Project{
 		RepoFullName: repoFullName,
-		Path: path,
+		Path:         path,
 	}
 }

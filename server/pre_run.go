@@ -3,10 +3,10 @@ package server
 import (
 	"bufio"
 	"fmt"
+	"github.com/hootsuite/atlantis/logging"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"github.com/hootsuite/atlantis/logging"
 )
 
 const InlineShebang = "/bin/sh -e"

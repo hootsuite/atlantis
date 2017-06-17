@@ -1,10 +1,9 @@
 package server
 
 import (
-	"testing"
 	"github.com/hootsuite/atlantis/models"
 	. "github.com/hootsuite/atlantis/testing_util"
-
+	"testing"
 )
 
 var p PlanExecutor

@@ -1,10 +1,10 @@
 package locking
 
 import (
-	"github.com/hootsuite/atlantis/models"
-	"fmt"
-	"regexp"
 	"errors"
+	"fmt"
+	"github.com/hootsuite/atlantis/models"
+	"regexp"
 )
 
 type Backend interface {
@@ -49,7 +49,7 @@ func (c *Client) Unlock(key string) error {
 	return c.backend.Unlock(models.Project{matches[1], matches[2]}, matches[3])
 }
 
-func (c *Client) List() (map[string]models.ProjectLock, error){
+func (c *Client) List() (map[string]models.ProjectLock, error) {
 	m := make(map[string]models.ProjectLock)
 	locks, err := c.backend.List()
 	if err != nil {

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/go-github/github"
-	"regexp"
 	"github.com/hootsuite/atlantis/models"
+	"regexp"
 )
 
 type RequestParser struct{}
@@ -102,9 +102,9 @@ func (r *RequestParser) extractCommentData(comment *github.IssueCommentEvent, ct
 	}
 	ctx.Repo = models.Repo{
 		FullName: *repoFullName,
-		Owner: *repoOwner,
-		Name: *repoName,
-		SSHURL: *repoSSHURL,
+		Owner:    *repoOwner,
+		Name:     *repoName,
+		SSHURL:   *repoSSHURL,
 	}
 	ctx.User = models.User{
 		Username: *commentorUsername,
@@ -143,11 +143,11 @@ func (r *RequestParser) extractPullData(pull *github.PullRequest, params *Comman
 	}
 	params.Pull = models.PullRequest{
 		BaseCommit: *base,
-		Author: *authorUsername,
-		Branch: *branch,
+		Author:     *authorUsername,
+		Branch:     *branch,
 		HeadCommit: *commit,
-		Link: *pullLink,
-		Num: *num,
+		Link:       *pullLink,
+		Num:        *num,
 	}
 	return nil
 }

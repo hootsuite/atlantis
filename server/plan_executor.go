@@ -3,15 +3,15 @@ package server
 import (
 	"errors"
 	"fmt"
+	"github.com/hootsuite/atlantis/locking"
+	"github.com/hootsuite/atlantis/logging"
+	"github.com/hootsuite/atlantis/models"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
-	"strings"
-	"github.com/hootsuite/atlantis/locking"
-	"github.com/hootsuite/atlantis/logging"
-	"github.com/hootsuite/atlantis/models"
 	"path/filepath"
+	"strings"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and Github
@@ -31,7 +31,7 @@ type PlanExecutor struct {
 /** Result Types **/
 type PlanSuccess struct {
 	TerraformOutput string
-	LockURL   string
+	LockURL         string
 }
 
 func (p PlanSuccess) Template() *CompiledTemplate {
@@ -235,7 +235,7 @@ func (p *PlanExecutor) plan(
 	lockAttempt, err := p.lockingClient.TryLock(project, ctx.Command.environment, ctx.Pull.Num)
 	if err != nil {
 		return PathResult{
-			Status:" failure",
+			Status: " failure",
 			Result: GeneralError{fmt.Errorf("failed to lock state: %v", err)},
 		}
 	}
@@ -338,7 +338,7 @@ func (p *PlanExecutor) plan(
 		Status: "success",
 		Result: PlanSuccess{
 			TerraformOutput: output,
-			LockURL: p.DeleteLockURL(lockAttempt.LockKey),
+			LockURL:         p.DeleteLockURL(lockAttempt.LockKey),
 		},
 	}
 }

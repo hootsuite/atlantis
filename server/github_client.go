@@ -1,9 +1,9 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"github.com/google/go-github/github"
-	"context"
 	"github.com/hootsuite/atlantis/models"
 )
 
@@ -16,7 +16,7 @@ const (
 	statusContext = "Atlantis"
 	PendingStatus = "pending"
 	SuccessStatus = "success"
-	ErrorStatus = "error"
+	ErrorStatus   = "error"
 	FailureStatus = "failure"
 )
 

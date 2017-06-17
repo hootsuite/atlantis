@@ -4,10 +4,10 @@ import (
 	. "github.com/hootsuite/atlantis/testing_util"
 
 	"github.com/boltdb/bolt"
+	"github.com/pkg/errors"
+	"io/ioutil"
 	"os"
 	"testing"
-	"io/ioutil"
-	"github.com/pkg/errors"
 
 	"github.com/hootsuite/atlantis/locking/boltdb"
 	"github.com/hootsuite/atlantis/models"
@@ -210,7 +210,7 @@ func TestUnlockByPullOne(t *testing.T) {
 
 	t.Log("...delete nothing when its the same repo but a different pull")
 	{
-		err := b.UnlockByPull(project.RepoFullName, pullNum + 1)
+		err := b.UnlockByPull(project.RepoFullName, pullNum+1)
 		Ok(t, err)
 		ls, err := b.List()
 		Ok(t, err)
@@ -308,4 +308,3 @@ func cleanupDB(db *bolt.DB) {
 	os.Remove(db.Path())
 	db.Close()
 }
-

@@ -1,19 +1,19 @@
 package boltdb
 
 import (
-	"github.com/boltdb/bolt"
-	"fmt"
-	"encoding/json"
-	"github.com/pkg/errors"
 	"bytes"
-	"os"
-	"time"
-	"path"
+	"encoding/json"
+	"fmt"
+	"github.com/boltdb/bolt"
 	"github.com/hootsuite/atlantis/models"
+	"github.com/pkg/errors"
+	"os"
+	"path"
+	"time"
 )
 
 type Backend struct {
-	db          *bolt.DB
+	db     *bolt.DB
 	bucket []byte
 }
 
@@ -21,14 +21,14 @@ const bucketName = "runLocks"
 
 func New(dataDir string) (*Backend, error) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, errors.Wrap(err,"creating data dir")
+		return nil, errors.Wrap(err, "creating data dir")
 	}
 	db, err := bolt.Open(path.Join(dataDir, "atlantis.db"), 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		if err.Error() == "timeout" {
 			return nil, errors.New("starting BoltDB: timeout (a possible cause is another Atlantis instance already running)")
 		}
-		return nil, errors.Wrap(err,"starting BoltDB")
+		return nil, errors.Wrap(err, "starting BoltDB")
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists([]byte(bucketName)); err != nil {
@@ -37,7 +37,7 @@ func New(dataDir string) (*Backend, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, errors.Wrap(err,"starting BoltDB")
+		return nil, errors.Wrap(err, "starting BoltDB")
 	}
 	// todo: close BoltDB when server is sigtermed
 	return &Backend{db, []byte(bucketName)}, nil
@@ -147,7 +147,7 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 	// delete the locks
 	for _, lock := range locks {
 		if err = b.Unlock(lock.Project, lock.Env); err != nil {
-			return errors.Wrapf(err,"unlocking repo %s, path %s, env %s", lock.Project.RepoFullName, lock.Project.Path, lock.Env)
+			return errors.Wrapf(err, "unlocking repo %s, path %s, env %s", lock.Project.RepoFullName, lock.Project.Path, lock.Env)
 		}
 	}
 	return nil

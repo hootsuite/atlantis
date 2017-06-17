@@ -2,28 +2,28 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"encoding/json"
 
-	"github.com/google/go-github/github"
-	"github.com/urfave/cli"
-	"github.com/hootsuite/atlantis/recovery"
-	"github.com/hootsuite/atlantis/locking"
-	"github.com/urfave/negroni"
-	"github.com/hootsuite/atlantis/middleware"
-	"github.com/hootsuite/atlantis/logging"
 	"github.com/elazarl/go-bindata-assetfs"
+	"github.com/google/go-github/github"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
-	"io/ioutil"
-	"github.com/hootsuite/atlantis/locking/dynamodb"
-	"github.com/hootsuite/atlantis/models"
+	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/locking/boltdb"
+	"github.com/hootsuite/atlantis/locking/dynamodb"
+	"github.com/hootsuite/atlantis/logging"
+	"github.com/hootsuite/atlantis/middleware"
+	"github.com/hootsuite/atlantis/models"
+	"github.com/hootsuite/atlantis/recovery"
+	"github.com/pkg/errors"
+	"github.com/urfave/cli"
+	"github.com/urfave/negroni"
+	"io/ioutil"
 	"path/filepath"
 	"time"
 )
@@ -55,10 +55,10 @@ type Server struct {
 
 // the mapstructure tags correspond to flags in cmd/server.go
 type ServerConfig struct {
-	GitHubHostname  string `mapstructure:"gh-hostname"`
-	GitHubUser      string `mapstructure:"gh-user"`
-	GitHubPassword  string `mapstructure:"gh-password"`
-	SSHKey          string `mapstructure:"ssh-key"`
+	GitHubHostname       string `mapstructure:"gh-hostname"`
+	GitHubUser           string `mapstructure:"gh-user"`
+	GitHubPassword       string `mapstructure:"gh-password"`
+	SSHKey               string `mapstructure:"ssh-key"`
 	AssumeRole           string `mapstructure:"aws-assume-role-arn"`
 	Port                 int    `mapstructure:"port"`
 	ScratchDir           string `mapstructure:"scratch-dir"`
@@ -212,7 +212,7 @@ func (s *Server) Start() error {
 
 	// function that planExecutor can use to construct delete lock urls
 	// injecting this here because this is the earliest routes are created
-	s.planExecutor.DeleteLockURL = func (lockID string) string {
+	s.planExecutor.DeleteLockURL = func(lockID string) string {
 		// ignoring error since guaranteed to succeed if "id" is specified
 		u, _ := deleteLockRoute.URL("id", url.QueryEscape(lockID))
 		return s.atlantisURL + u.RequestURI()
@@ -237,19 +237,19 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type lock struct {
-		UnlockURL string
+		UnlockURL    string
 		RepoFullName string
-		PullNum int
-		Time time.Time
+		PullNum      int
+		Time         time.Time
 	}
 	var results []lock
 	for id, v := range locks {
 		u, _ := s.router.Get(deleteLockRoute).URL("id", url.QueryEscape(id))
 		results = append(results, lock{
-			UnlockURL: u.String(),
+			UnlockURL:    u.String(),
 			RepoFullName: v.Project.RepoFullName,
-			PullNum: v.PullNum,
-			Time: v.Time,
+			PullNum:      v.PullNum,
+			Time:         v.Time,
 		})
 	}
 	indexTemplate.Execute(w, results)
@@ -282,7 +282,7 @@ func (s *Server) postHooks(w http.ResponseWriter, r *http.Request) {
 	bytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w,"could not read body: %s\n", err)
+		fmt.Fprintf(w, "could not read body: %s\n", err)
 		return
 	}
 
@@ -313,7 +313,7 @@ func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.P
 		fmt.Fprintf(w, "Error unlocking locks: %v\n", err)
 		return
 	}
-	fmt.Fprintln(w,"Locks unlocked")
+	fmt.Fprintln(w, "Locks unlocked")
 }
 
 func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github.IssueCommentEvent, githubReqID string) {
