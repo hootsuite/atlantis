@@ -52,8 +52,6 @@ func (b *Backend) TryLock(project models.Project, env string, pullNum int) (bool
 	// return variables
 	var lockAcquired bool
 	var lockingPullNum int
-	var currLock models.ProjectLock
-
 	key := b.key(project, env)
 	newLock := models.ProjectLock{
 		PullNum: pullNum,
@@ -75,10 +73,12 @@ func (b *Backend) TryLock(project models.Project, env string, pullNum int) (bool
 		}
 
 		// otherwise the lock fails, return to caller the run that's holding the lock
+		var currLock models.ProjectLock
 		if err := json.Unmarshal(currLockSerialized, &currLock); err != nil {
 			return errors.Wrap(err, "failed to deserialize current lock")
 		}
 		lockAcquired = false
+		lockingPullNum = currLock.PullNum
 		return nil
 	})
 
@@ -86,7 +86,7 @@ func (b *Backend) TryLock(project models.Project, env string, pullNum int) (bool
 		return false, lockingPullNum, errors.Wrap(transactionErr, "DB transaction failed")
 	}
 
-	return lockAcquired, currLock.PullNum, nil
+	return lockAcquired, lockingPullNum, nil
 }
 
 func (b Backend) Unlock(p models.Project, env string) error {

@@ -146,7 +146,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	}
 	ctx.Log.Debug("Found %d modified terraform files: %v", len(modifiedTerraformFiles), modifiedTerraformFiles)
 
-	projects := p.ModifiedProjects(ctx.Repo, modifiedTerraformFiles)
+	projects := p.ModifiedProjects(ctx.Repo.FullName, modifiedTerraformFiles)
 	if len(projects) == 0 {
 		ctx.Log.Info("no Terraform projects were modified")
 		p.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Plan Failed")
@@ -167,7 +167,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	planOutputs := []PathResult{}
 	for _, project := range projects {
 		// todo: not sure it makes sense to be generating the output filename and plan name here
-		tfPlanFilename := p.GenerateOutputFilename(cloneDir, project, ctx.Command.environment)
+		tfPlanFilename := p.GenerateOutputFilename(project, ctx.Command.environment)
 		tfPlanName := fmt.Sprintf("%s_%d%s", strings.Replace(ctx.Repo.FullName, "/", "_", -1), ctx.Pull.Num, tfPlanFilename)
 		s3Key := fmt.Sprintf("%s/%s", ctx.Repo.FullName, tfPlanName)
 		// check if config file is found, if not we continue the run
@@ -366,13 +366,13 @@ func (p *PlanExecutor) trimSuffix(s, suffix string) string {
 
 // ModifiedProjects returns the list of Terraform projects that have been changed due to the
 // modified files
-func (p *PlanExecutor) ModifiedProjects(repo models.Repo, modifiedFiles []string) []models.Project {
+func (p *PlanExecutor) ModifiedProjects(repoFullName string, modifiedFiles []string) []models.Project {
 	var projects []models.Project
 	seenPaths := make(map[string]bool)
 	for _, modifiedFile := range modifiedFiles {
 		path := p.getProjectPath(modifiedFile)
 		if _, ok := seenPaths[path]; !ok {
-			projects = append(projects, models.NewProject(repo.FullName, path))
+			projects = append(projects, models.NewProject(repoFullName, path))
 			seenPaths[path] = true
 		}
 	}
@@ -422,7 +422,7 @@ func (p *PlanExecutor) DeleteLocalPlanFile(path string) error {
 
 // GenerateOutputFilename determines the name of the plan that will be stored in s3
 // if we're executing inside a sub directory, there will be a leading underscore
-func (p *PlanExecutor) GenerateOutputFilename(repoDir string, project models.Project, tfEnvName string) string {
+func (p *PlanExecutor) GenerateOutputFilename(project models.Project, tfEnvName string) string {
 	prefix := ""
 	if project.Path != "." {
 		// If not executing at repo root, need to encode the sub dir in the name of the output file.

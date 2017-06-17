@@ -38,13 +38,13 @@ func Equals(tb testing.TB, exp, act interface{}) {
 }
 
 // Contains fails the test if the slice doesn't contain the expected element
-func Contains(tb testing.TB, exp interface{}, act []interface{}) {
-	for _, v := range act {
+func Contains(tb testing.TB, exp interface{}, slice []interface{}) {
+	for _, v := range slice {
 		if reflect.DeepEqual(v, exp) {
 			return
 		}
 	}
 	_, file, line, _ := runtime.Caller(1)
-	fmt.Printf("\033[31m%s:%d:\n\n\texp: %#v\n\n\twas not in: %#v\033[39m\n\n", filepath.Base(file), line, exp, act)
+	fmt.Printf("\033[31m%s:%d:\n\n\texp: %#v\n\n\twas not in: %#v\033[39m\n\n", filepath.Base(file), line, exp, slice)
 	tb.FailNow()
 }
