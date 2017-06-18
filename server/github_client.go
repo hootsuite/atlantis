@@ -17,15 +17,12 @@ const (
 )
 
 type Status int
-
-
 const (
 	Pending Status = iota
 	Success
 	Failure
 	Error
 )
-
 func (s Status) String() string {
 	switch s {
 	case Pending:

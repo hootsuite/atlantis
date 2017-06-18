@@ -58,7 +58,7 @@ func (b *Backend) CopyPlans(repoDir string, repoFullName string, env string, pul
 		downloadPath := filepath.Join(repoDir, relPath)
 		file, err := os.Create(downloadPath)
 		if err != nil {
-			return nil, errors.Wrapf(err, "creating file %b to download plan to", downloadPath)
+			return nil, errors.Wrapf(err, "creating file %s to download plan to", downloadPath)
 		}
 		defer file.Close()
 
@@ -84,7 +84,7 @@ func (b *Backend) CopyPlans(repoDir string, repoFullName string, env string, pul
 func (b *Backend) SavePlan(path string, project models.Project, env string, pullNum int) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return errors.Wrapf(err, "opening plan at %b", path)
+		return errors.Wrapf(err, "opening plan at %s", path)
 	}
 
 	key := pathutil.Join(b.keyPrefix, project.RepoFullName, strconv.Itoa(pullNum), project.Path, env+".tfplan")

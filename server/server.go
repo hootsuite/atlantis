@@ -146,7 +146,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		}
 		lockingClient = locking.NewClient(backend)
 	}
-	var planStorage plan.Backend
+	var planBackend plan.Backend
 	if config.PlanBackend == PlanS3Backend {
 		if awsSession == nil {
 			awsSession, err = awsConfig.CreateAWSSession()
@@ -154,9 +154,9 @@ func NewServer(config ServerConfig) (*Server, error) {
 				return nil, errors.Wrap(err, "creating aws session for S3")
 			}
 		}
-		planStorage = s3.New(awsSession, config.PlanS3Bucket, config.PlanS3Prefix)
+		planBackend = s3.New(awsSession, config.PlanS3Bucket, config.PlanS3Prefix)
 	} else {
-		planStorage, err = file.New(config.DataDir)
+		planBackend, err = file.New(config.DataDir)
 		if err != nil {
 			return nil, errors.Wrap(err, "creating file backend for plans")
 		}
@@ -170,7 +170,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
 		requireApproval:       config.RequireApproval,
-		planStorage:           planStorage,
+		planStorage:           planBackend,
 	}
 	planExecutor := &PlanExecutor{
 		github:                githubClient,
@@ -180,7 +180,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
-		planStorage:           planStorage,
+		planStorage:           planBackend,
 	}
 	helpExecutor := &HelpExecutor{}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))

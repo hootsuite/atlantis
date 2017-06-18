@@ -80,11 +80,11 @@ func (b *Backend) CopyPlans(dstRepo string, repoFullName string, env string, pul
 func (b *Backend) copy(src string, dst string) error {
 	data, err := ioutil.ReadFile(src)
 	if err != nil {
-		return errors.Wrapf(err, "reading %b", src)
+		return errors.Wrapf(err, "reading %s", src)
 	}
 
 	if err = ioutil.WriteFile(dst, data, 0644); err != nil {
-		return errors.Wrapf(err, "writing %b", dst)
+		return errors.Wrapf(err, "writing %s", dst)
 	}
 	return nil
 }
