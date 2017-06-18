@@ -10,6 +10,10 @@ import (
 	"os"
 	"strings"
 
+	"io/ioutil"
+	"time"
+
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/google/go-github/github"
 	"github.com/gorilla/mux"
@@ -19,37 +23,35 @@ import (
 	"github.com/hootsuite/atlantis/logging"
 	"github.com/hootsuite/atlantis/middleware"
 	"github.com/hootsuite/atlantis/models"
+	"github.com/hootsuite/atlantis/plan"
+	"github.com/hootsuite/atlantis/plan/file"
+	"github.com/hootsuite/atlantis/plan/s3"
 	"github.com/hootsuite/atlantis/recovery"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
-	"io/ioutil"
-	"time"
 )
 
 const (
 	deleteLockRoute        = "delete-lock"
 	LockingFileBackend     = "file"
 	LockingDynamoDBBackend = "dynamodb"
+	PlanFileBackend        = "file"
+	PlanS3Backend          = "s3"
 )
 
 // Server listens for GitHub events and runs the necessary Atlantis command
 type Server struct {
-	router           *mux.Router
-	port             int
-	scratchDir       string
-	awsRegion        string
-	s3Bucket         string
-	githubBaseClient *github.Client
-	githubClient     *GithubClient
-	applyExecutor    *ApplyExecutor
-	planExecutor     *PlanExecutor
-	helpExecutor     *HelpExecutor
-	logger           *logging.SimpleLogger
-	githubComments   *GithubCommentRenderer
-	requestParser    *RequestParser
-	lockingClient    *locking.Client
-	atlantisURL      string
+	router        *mux.Router
+	port          int
+	githubClient  *GithubClient
+	applyExecutor *ApplyExecutor
+	planExecutor  *PlanExecutor
+	helpExecutor  *HelpExecutor
+	logger        *logging.SimpleLogger
+	requestParser *RequestParser
+	lockingClient *locking.Client
+	atlantisURL   string
 }
 
 // the mapstructure tags correspond to flags in cmd/server.go
@@ -65,8 +67,10 @@ type ServerConfig struct {
 	LockingDynamoDBTable string `mapstructure:"locking-dynamodb-table"`
 	LogLevel             string `mapstructure:"log-level"`
 	Port                 int    `mapstructure:"port"`
+	PlanS3Bucket         string `mapstructure:"plan-s3-bucket"`
+	PlanS3Prefix         string `mapstructure:"plan-s3-prefix"`
+	PlanBackend          string `mapstructure:"plan-backend"`
 	RequireApproval      bool   `mapstructure:"require-approval"`
-	S3Bucket             string `mapstructure:"s3-bucket"`
 	SSHKey               string `mapstructure:"ssh-key"`
 	ScratchDir           string `mapstructure:"scratch-dir"`
 }
@@ -91,7 +95,6 @@ type PathResult struct {
 	Status string // todo: this should be an enum for success/error/failure
 	Result Templater
 }
-
 
 type Templater interface {
 	Template() *CompiledTemplate
@@ -126,13 +129,16 @@ func NewServer(config ServerConfig) (*Server, error) {
 		AWSRegion:  config.AWSRegion,
 		AWSRoleArn: config.AssumeRole,
 	}
+
+	var awsSession *session.Session
 	var lockingClient *locking.Client
+	var err error
 	if config.LockingBackend == LockingDynamoDBBackend {
-		session, err := awsConfig.CreateAWSSession()
+		awsSession, err = awsConfig.CreateAWSSession()
 		if err != nil {
 			return nil, errors.Wrap(err, "creating aws session for DynamoDB")
 		}
-		lockingClient = locking.NewClient(dynamodb.New(config.LockingDynamoDBTable, session))
+		lockingClient = locking.NewClient(dynamodb.New(config.LockingDynamoDBTable, awsSession))
 	} else {
 		backend, err := boltdb.New(config.DataDir)
 		if err != nil {
@@ -140,46 +146,56 @@ func NewServer(config ServerConfig) (*Server, error) {
 		}
 		lockingClient = locking.NewClient(backend)
 	}
+	var planStorage plan.Backend
+	if config.PlanBackend == PlanS3Backend {
+		if awsSession == nil {
+			awsSession, err = awsConfig.CreateAWSSession()
+			if err != nil {
+				return nil, errors.Wrap(err, "creating aws session for S3")
+			}
+		}
+		planStorage = s3.New(awsSession, config.PlanS3Bucket, config.PlanS3Prefix)
+	} else {
+		planStorage, err = file.New(config.DataDir)
+		if err != nil {
+			return nil, errors.Wrap(err, "creating file backend for plans")
+		}
+	}
 	applyExecutor := &ApplyExecutor{
 		github:                githubClient,
 		awsConfig:             awsConfig,
 		scratchDir:            config.ScratchDir,
-		s3Bucket:              config.S3Bucket,
 		sshKey:                config.SSHKey,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
 		requireApproval:       config.RequireApproval,
+		planStorage:           planStorage,
 	}
 	planExecutor := &PlanExecutor{
 		github:                githubClient,
 		awsConfig:             awsConfig,
 		scratchDir:            config.ScratchDir,
-		s3Bucket:              config.S3Bucket,
 		sshKey:                config.SSHKey,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
+		planStorage:           planStorage,
 	}
 	helpExecutor := &HelpExecutor{}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	router := mux.NewRouter()
 	return &Server{
-		router:           router,
-		port:             config.Port,
-		scratchDir:       config.ScratchDir,
-		awsRegion:        config.AWSRegion,
-		s3Bucket:         config.S3Bucket,
-		applyExecutor:    applyExecutor,
-		planExecutor:     planExecutor,
-		helpExecutor:     helpExecutor,
-		githubBaseClient: githubBaseClient,
-		githubClient:     githubClient,
-		logger:           logger,
-		githubComments:   githubComments,
-		requestParser:    &RequestParser{},
-		lockingClient:    lockingClient,
-		atlantisURL:      config.AtlantisURL,
+		router:        router,
+		port:          config.Port,
+		applyExecutor: applyExecutor,
+		planExecutor:  planExecutor,
+		helpExecutor:  helpExecutor,
+		githubClient:  githubClient,
+		logger:        logger,
+		requestParser: &RequestParser{},
+		lockingClient: lockingClient,
+		atlantisURL:   config.AtlantisURL,
 	}, nil
 }
 

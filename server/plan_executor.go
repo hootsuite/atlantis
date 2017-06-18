@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"github.com/hootsuite/atlantis/plan"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
@@ -26,6 +27,7 @@ type PlanExecutor struct {
 	lockingClient         *locking.Client
 	// DeleteLockURL is a function that given a lock id will return a url for deleting the lock
 	DeleteLockURL func(id string) (url string)
+	planStorage   plan.Backend
 }
 
 /** Result Types **/
@@ -160,16 +162,10 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		p.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Plan Error")
 		return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 	}
-	s3Client := NewS3Client(p.awsConfig, p.s3Bucket, "plans")
 
 	var config Config
-	// run `terraform plan` in each plan path and collect the results
 	planOutputs := []PathResult{}
 	for _, project := range projects {
-		// todo: not sure it makes sense to be generating the output filename and plan name here
-		tfPlanFilename := p.GenerateOutputFilename(project, ctx.Command.environment)
-		tfPlanName := fmt.Sprintf("%s_%d%s", strings.Replace(ctx.Repo.FullName, "/", "_", -1), ctx.Pull.Num, tfPlanFilename)
-		s3Key := fmt.Sprintf("%s/%s", ctx.Repo.FullName, tfPlanName)
 		// check if config file is found, if not we continue the run
 		absolutePath := filepath.Join(cloneDir, project.Path)
 		if config.Exists(absolutePath) {
@@ -195,7 +191,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 				p.terraform.tfExecutableName = "terraform"
 			}
 		}
-		generatePlanResponse := p.plan(ctx, cloneDir, p.scratchDir, tfPlanName, s3Client, project, s3Key, p.sshKey, config.StashPath)
+		generatePlanResponse := p.plan(ctx, cloneDir, p.scratchDir, project, p.sshKey, config.StashPath)
 		generatePlanResponse.Path = project.Path
 		planOutputs = append(planOutputs, generatePlanResponse)
 	}
@@ -209,10 +205,7 @@ func (p *PlanExecutor) plan(
 	ctx *CommandContext,
 	repoDir string,
 	planOutDir string,
-	tfPlanName string,
-	s3Client S3Client,
 	project models.Project,
-	s3Key string,
 	sshKey string,
 	stashPath string) PathResult {
 	ctx.Log.Info("generating plan for path %q", project.Path)
@@ -251,13 +244,11 @@ func (p *PlanExecutor) plan(
 	// Run terraform plan
 	ctx.Log.Info("running terraform plan in directory %q", project.Path)
 	tfPlanCmd := []string{"plan", "-refresh", "-no-color"}
-	// Generate terraform plan filename
-	tfPlanOutputPath := filepath.Join(planOutDir, tfPlanName)
-	// Generate terraform plan arguments
+	planFile := filepath.Join(repoDir, project.Path, fmt.Sprintf("%s.tfplan", tfEnv))
 	if ctx.Command.environment != "" {
 		tfEnvFileName := filepath.Join("env", ctx.Command.environment+".tfvars")
 		if _, err := os.Stat(filepath.Join(repoDir, project.Path, tfEnvFileName)); err == nil {
-			tfPlanCmd = append(tfPlanCmd, "-var-file", tfEnvFileName, "-out", tfPlanOutputPath)
+			tfPlanCmd = append(tfPlanCmd, "-var-file", tfEnvFileName, "-out", planFile)
 		} else {
 			ctx.Log.Err("environment file %q not found", tfEnvFileName)
 			return PathResult{
@@ -266,7 +257,7 @@ func (p *PlanExecutor) plan(
 			}
 		}
 	} else {
-		tfPlanCmd = append(tfPlanCmd, "-out", tfPlanOutputPath)
+		tfPlanCmd = append(tfPlanCmd, "-out", planFile)
 	}
 
 	// set pull request creator as the session name
@@ -314,25 +305,24 @@ func (p *PlanExecutor) plan(
 			Result: err,
 		}
 	}
-	// Upload plan to S3
-	ctx.Log.Info("uploading plan to S3 with key %q", s3Key)
-	if err := UploadPlanFile(s3Client, s3Key, tfPlanOutputPath); err != nil {
-		err = fmt.Errorf("failed to upload to S3: %v", err)
-		ctx.Log.Err(err.Error())
+	// Save the plan
+	if err := p.planStorage.SavePlan(planFile, project, tfEnv, ctx.Pull.Num); err != nil {
+		ctx.Log.Err("saving plan: %s", err)
+		// there was an error planning so unlock
 		if err := p.lockingClient.Unlock(lockAttempt.LockKey); err != nil {
-			ctx.Log.Err("error unlocking state: %v", err)
+			ctx.Log.Err("error unlocking: %v", err)
 		}
 		return PathResult{
 			Status: "error",
 			Result: GeneralError{err},
 		}
 	}
+	ctx.Log.Info("saved plan successfully")
+
 	// Delete local plan file
-	planFilePath := fmt.Sprintf("%s/%s", planOutDir, tfPlanName)
-	ctx.Log.Info("deleting local plan file %q", planFilePath)
-	if err := os.Remove(planFilePath); err != nil {
-		ctx.Log.Err("failed to delete local plan file %q", planFilePath, err)
-		// todo: return an error
+	if err := os.Remove(planFile); err != nil {
+		ctx.Log.Err("failed to delete local plan file %q: %s", planFile, err)
+		// don't return an error since it should still be fine
 	}
 	return PathResult{
 		Status: "success",
@@ -355,13 +345,6 @@ func (p *PlanExecutor) filterToTerraform(files []string) []string {
 
 func (p *PlanExecutor) isInExcludeList(fileName string) bool {
 	return strings.Contains(fileName, "terraform.tfstate") || strings.Contains(fileName, "terraform.tfstate.backup") || strings.Contains(fileName, "_modules") || strings.Contains(fileName, "modules")
-}
-
-func (p *PlanExecutor) trimSuffix(s, suffix string) string {
-	if strings.HasSuffix(s, suffix) {
-		s = s[:len(s)-len(suffix)]
-	}
-	return s
 }
 
 // ModifiedProjects returns the list of Terraform projects that have been changed due to the
@@ -414,29 +397,6 @@ func (p *PlanExecutor) CleanWorkspace(log *logging.SimpleLogger, deleteFilesPref
 		}
 	}
 	return nil
-}
-
-func (p *PlanExecutor) DeleteLocalPlanFile(path string) error {
-	return os.Remove(path)
-}
-
-// GenerateOutputFilename determines the name of the plan that will be stored in s3
-// if we're executing inside a sub directory, there will be a leading underscore
-func (p *PlanExecutor) GenerateOutputFilename(project models.Project, tfEnvName string) string {
-	prefix := ""
-	if project.Path != "." {
-		// If not executing at repo root, need to encode the sub dir in the name of the output file.
-		// We do this by substituting / for _
-		// We also add an _ because this gets appended to a larger path
-		// todo: refactor the path handling so it's all in one place
-		prefix = "_" + strings.Replace(project.Path, "/", "_", -1)
-	}
-	suffix := ""
-	if tfEnvName != "" {
-		suffix = "." + tfEnvName
-	}
-
-	return prefix + ".tfplan" + suffix
 }
 
 func generateStatePath(path string, tfEnvName string) string {
