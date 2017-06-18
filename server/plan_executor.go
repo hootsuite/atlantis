@@ -79,7 +79,7 @@ func (p *PlanExecutor) execute(ctx *CommandContext, github *GithubClient) {
 }
 
 func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
-	p.github.UpdateStatus(ctx.Repo, ctx.Pull, "pending", "Planning...")
+	p.github.UpdateStatus(ctx.Repo, ctx.Pull, Pending, "Planning...")
 
 	// todo: lock when cloning or somehow separate workspaces
 	// clean the directory where we're going to clone
@@ -102,7 +102,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to create git ssh wrapper: %v", err)
 			ctx.Log.Err(errMsg)
-			p.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Plan Error")
+			p.github.UpdateStatus(ctx.Repo, ctx.Pull, Error, "Plan Error")
 			return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 		}
 
@@ -117,7 +117,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	if output, err := cloneCmd.CombinedOutput(); err != nil {
 		errMsg := fmt.Sprintf("failed to clone repository %q: %v: %s", ctx.Repo.SSHURL, err, string(output))
 		ctx.Log.Err(errMsg)
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Plan Error")
+		p.github.UpdateStatus(ctx.Repo, ctx.Pull, Error, "Plan Error")
 		return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 	}
 
@@ -128,7 +128,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	if err := checkoutCmd.Run(); err != nil {
 		errMsg := fmt.Sprintf("failed to git checkout branch %q: %v", ctx.Pull.Branch, err)
 		ctx.Log.Err(errMsg)
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Plan Error")
+		p.github.UpdateStatus(ctx.Repo, ctx.Pull, Error, "Plan Error")
 		return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 	}
 
@@ -137,13 +137,13 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to retrieve list of modified files from GitHub: %v", err)
 		ctx.Log.Err(errMsg)
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Plan Error")
+		p.github.UpdateStatus(ctx.Repo, ctx.Pull, Error, "Plan Error")
 		return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 	}
 	modifiedTerraformFiles := p.filterToTerraform(modifiedFiles)
 	if len(modifiedTerraformFiles) == 0 {
 		ctx.Log.Info("no modified terraform files found, exiting")
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Plan Failed")
+		p.github.UpdateStatus(ctx.Repo, ctx.Pull, Failure, "Plan Failed")
 		return ExecutionResult{SetupError: GeneralError{errors.New("Plan Failed: no modified terraform files found")}}
 	}
 	ctx.Log.Debug("Found %d modified terraform files: %v", len(modifiedTerraformFiles), modifiedTerraformFiles)
@@ -151,7 +151,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	projects := p.ModifiedProjects(ctx.Repo.FullName, modifiedTerraformFiles)
 	if len(projects) == 0 {
 		ctx.Log.Info("no Terraform projects were modified")
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Plan Failed")
+		p.github.UpdateStatus(ctx.Repo, ctx.Pull, Failure, "Plan Failed")
 		return ExecutionResult{SetupError: GeneralError{errors.New("Plan Failed: we determined that no terraform projects were modified")}}
 	}
 
@@ -159,7 +159,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	if err := p.CleanWorkspace(ctx.Log, planFilesPrefix, p.scratchDir, cloneDir, projects); err != nil {
 		errMsg := fmt.Sprintf("failed to clean workspace, aborting: %v", err)
 		ctx.Log.Err(errMsg)
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Plan Error")
+		p.github.UpdateStatus(ctx.Repo, ctx.Pull, Error, "Plan Error")
 		return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 	}
 
@@ -215,7 +215,7 @@ func (p *PlanExecutor) plan(
 		_, err := p.terraform.ConfigureRemoteState(ctx.Log, repoDir, project, ctx.Command.environment, sshKey)
 		if err != nil {
 			return PathResult{
-				Status: "error",
+				Status: Error,
 				Result: GeneralError{fmt.Errorf("failed to configure remote state: %s", err)},
 			}
 		}
@@ -228,7 +228,7 @@ func (p *PlanExecutor) plan(
 	lockAttempt, err := p.lockingClient.TryLock(project, ctx.Command.environment, ctx.Pull.Num)
 	if err != nil {
 		return PathResult{
-			Status: " failure",
+			Status: Failure,
 			Result: GeneralError{fmt.Errorf("failed to lock state: %v", err)},
 		}
 	}
@@ -236,7 +236,7 @@ func (p *PlanExecutor) plan(
 	// the run is locked unless the locking run is the same pull id as this run
 	if lockAttempt.LockAcquired == false && lockAttempt.LockingPullNum != ctx.Pull.Num {
 		return PathResult{
-			Status: "failure",
+			Status: Failure,
 			Result: RunLockedFailure{lockAttempt.LockingPullNum},
 		}
 	}
@@ -252,7 +252,7 @@ func (p *PlanExecutor) plan(
 		} else {
 			ctx.Log.Err("environment file %q not found", tfEnvFileName)
 			return PathResult{
-				Status: "failure",
+				Status: Failure,
 				Result: EnvironmentFileNotFoundFailure{tfEnvFileName},
 			}
 		}
@@ -266,7 +266,7 @@ func (p *PlanExecutor) plan(
 	if err != nil {
 		ctx.Log.Err(err.Error())
 		return PathResult{
-			Status: "error",
+			Status: Error,
 			Result: GeneralError{err},
 		}
 	}
@@ -276,7 +276,7 @@ func (p *PlanExecutor) plan(
 		err = fmt.Errorf("failed to get assumed role credentials: %v", err)
 		ctx.Log.Err(err.Error())
 		return PathResult{
-			Status: "error",
+			Status: Error,
 			Result: GeneralError{err},
 		}
 	}
@@ -301,7 +301,7 @@ func (p *PlanExecutor) plan(
 			ctx.Log.Err("error unlocking state: %v", err)
 		}
 		return PathResult{
-			Status: "failure",
+			Status: Failure,
 			Result: err,
 		}
 	}
@@ -313,7 +313,7 @@ func (p *PlanExecutor) plan(
 			ctx.Log.Err("error unlocking: %v", err)
 		}
 		return PathResult{
-			Status: "error",
+			Status: Error,
 			Result: GeneralError{err},
 		}
 	}
@@ -325,7 +325,7 @@ func (p *PlanExecutor) plan(
 		// don't return an error since it should still be fine
 	}
 	return PathResult{
-		Status: "success",
+		Status: Success,
 		Result: PlanSuccess{
 			TerraformOutput: output,
 			LockURL:         p.DeleteLockURL(lockAttempt.LockKey),
@@ -403,26 +403,11 @@ func generateStatePath(path string, tfEnvName string) string {
 	return strings.Replace(path, "$ENVIRONMENT", tfEnvName, -1)
 }
 
-func (p *PlanExecutor) updateGithubStatus(ctx *CommandContext, pathResults []PathResult) {
-	// the status will be the worst result
-	worstResult := p.worstResult(pathResults)
-	if worstResult == "success" {
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, SuccessStatus, "Plan Succeeded")
-	} else if worstResult == "failure" {
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Plan Failed")
-	} else {
-		p.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Plan Error")
+func (a *PlanExecutor) updateGithubStatus(ctx *CommandContext, pathResults []PathResult) {
+	var statuses []Status
+	for _, p := range pathResults {
+		statuses = append(statuses, p.Status)
 	}
-}
-
-func (p *PlanExecutor) worstResult(results []PathResult) string {
-	var worst string = "success"
-	for _, result := range results {
-		if result.Status == "error" {
-			return result.Status
-		} else if result.Status == "failure" {
-			worst = result.Status
-		}
-	}
-	return worst
+	worst := WorstStatus(statuses)
+	a.github.UpdateStatus(ctx.Repo, ctx.Pull, worst, "Plan " + worst.String())
 }

@@ -57,6 +57,7 @@ func (n NoPlansFailure) Template() *CompiledTemplate {
 }
 
 func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
+	a.github.UpdateStatus(ctx.Repo, ctx.Pull, Pending, "Applying...")
 	res := a.setupAndApply(ctx)
 	res.Command = Apply
 	comment := a.githubCommentRenderer.render(res, ctx.Log.History.String(), ctx.Command.verbose)
@@ -64,21 +65,8 @@ func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
-	a.github.UpdateStatus(ctx.Repo, ctx.Pull, PendingStatus, "Applying...")
-
-	if a.requireApproval {
-		ok, err := a.github.PullIsApproved(ctx.Repo, ctx.Pull)
-		if err != nil {
-			msg := fmt.Sprintf("failed to determine if pull request was approved: %v", err)
-			ctx.Log.Err(msg)
-			a.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Apply Error")
-			return ExecutionResult{SetupError: GeneralError{errors.New(msg)}}
-		}
-		if !ok {
-			ctx.Log.Info("pull request was not approved")
-			a.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Apply Failed")
-			return ExecutionResult{SetupFailure: PullNotApprovedFailure{}}
-		}
+	if approved, res := a.isApproved(ctx); !approved {
+		return res
 	}
 
 	// todo: reclone repo and switch branch, don't assume it's already there
@@ -87,19 +75,18 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get plans: %s", err)
 		ctx.Log.Err(errMsg)
-		a.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Apply Error")
+		a.github.UpdateStatus(ctx.Repo, ctx.Pull, Error, "Apply Error")
 		return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 	}
 	if len(plans) == 0 {
 		failure := "found 0 plans for this pull request"
 		ctx.Log.Warn(failure)
-		a.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Apply Failure")
+		a.github.UpdateStatus(ctx.Repo, ctx.Pull, Failure, "Apply Failure")
 		return ExecutionResult{SetupFailure: NoPlansFailure{}}
 	}
 
 	applyOutputs := []PathResult{}
 	for _, plan := range plans {
-		// run apply
 		output := a.apply(ctx, repoDir, plan)
 		output.Path = plan.LocalPath
 		applyOutputs = append(applyOutputs, output)
@@ -121,7 +108,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			msg := fmt.Sprintf("Error reading config file: %v", err)
 			ctx.Log.Err(msg)
 			return PathResult{
-				Status: "error",
+				Status: Error,
 				Result: GeneralError{errors.New(msg)},
 			}
 		}
@@ -131,7 +118,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			msg := fmt.Sprintf("pre run failed: %v", err)
 			ctx.Log.Err(msg)
 			return PathResult{
-				Status: "error",
+				Status: Error,
 				Result: GeneralError{errors.New(msg)},
 			}
 		}
@@ -151,7 +138,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			msg := fmt.Sprintf("failed to set up remote state: %v", err)
 			ctx.Log.Err(msg)
 			return PathResult{
-				Status: "error",
+				Status: Error,
 				Result: GeneralError{errors.New(msg)},
 			}
 		}
@@ -170,13 +157,13 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 		lockAttempt, err := a.lockingClient.TryLock(plan.Project, tfEnv, ctx.Pull.Num)
 		if err != nil {
 			return PathResult{
-				Status: "error",
+				Status: Error,
 				Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
 			}
 		}
 		if lockAttempt.LockAcquired != true && lockAttempt.LockingPullNum != ctx.Pull.Num {
 			return PathResult{
-				Status: "error",
+				Status: Error,
 				Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.LockingPullNum)},
 			}
 		}
@@ -189,7 +176,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	if err != nil {
 		ctx.Log.Err(err.Error())
 		return PathResult{
-			Status: "error",
+			Status: Error,
 			Result: GeneralError{err},
 		}
 	}
@@ -199,7 +186,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 		msg := fmt.Sprintf("failed to get assumed role credentials: %v", err)
 		ctx.Log.Err(msg)
 		return PathResult{
-			Status: "error",
+			Status: Error,
 			Result: GeneralError{errors.New(msg)},
 		}
 	}
@@ -207,7 +194,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	ctx.Log.Info("running apply from %q", plan.Project.Path)
 
 	return PathResult{
-		Status: "success",
+		Status: Success,
 		Result: ApplySuccess{"nice!@"},
 	}
 
@@ -219,7 +206,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	if err != nil {
 		ctx.Log.Err("failed to apply: %v %s", err, output)
 		return PathResult{
-			Status: "failure",
+			Status: Failure,
 			Result: ApplyFailure{Command: strings.Join(terraformApplyCmdArgs, " "), Output: output, ErrorMessage: err.Error()},
 		}
 	}
@@ -227,31 +214,36 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	// clean up, delete local plan file
 	os.Remove(plan.LocalPath) // swallow errors, okay if we failed to delete
 	return PathResult{
-		Status: "success",
+		Status: Success,
 		Result: ApplySuccess{output},
 	}
 }
 
 func (a *ApplyExecutor) updateGithubStatus(ctx *CommandContext, pathResults []PathResult) {
-	// the status will be the worst result
-	worstResult := a.worstResult(pathResults)
-	if worstResult == "success" {
-		a.github.UpdateStatus(ctx.Repo, ctx.Pull, SuccessStatus, "Apply Succeeded")
-	} else if worstResult == "failure" {
-		a.github.UpdateStatus(ctx.Repo, ctx.Pull, FailureStatus, "Apply Failed")
-	} else {
-		a.github.UpdateStatus(ctx.Repo, ctx.Pull, ErrorStatus, "Apply Error")
+	var statuses []Status
+	for _, p := range pathResults {
+		statuses = append(statuses, p.Status)
 	}
+	worst := WorstStatus(statuses)
+	a.github.UpdateStatus(ctx.Repo, ctx.Pull, worst, "Apply " + worst.String())
 }
 
-func (a *ApplyExecutor) worstResult(results []PathResult) string {
-	var worst string = "success"
-	for _, result := range results {
-		if result.Status == "error" {
-			return result.Status
-		} else if result.Status == "failure" {
-			worst = result.Status
-		}
+func (a *ApplyExecutor) isApproved(ctx *CommandContext) (bool, ExecutionResult) {
+	if !a.requireApproval {
+		return false, ExecutionResult{}
 	}
-	return worst
+
+	ok, err := a.github.PullIsApproved(ctx.Repo, ctx.Pull)
+	if err != nil {
+		msg := fmt.Sprintf("failed to determine if pull request was approved: %v", err)
+		ctx.Log.Err(msg)
+		a.github.UpdateStatus(ctx.Repo, ctx.Pull, Error, "Apply Error")
+		return false, ExecutionResult{SetupError: GeneralError{errors.New(msg)}}
+	}
+	if !ok {
+		ctx.Log.Info("pull request was not approved")
+		a.github.UpdateStatus(ctx.Repo, ctx.Pull, Failure, "Apply Failed")
+		return false, ExecutionResult{SetupFailure: PullNotApprovedFailure{}}
+	}
+	return true, ExecutionResult{}
 }

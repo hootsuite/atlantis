@@ -14,14 +14,47 @@ type GithubClient struct {
 
 const (
 	statusContext = "Atlantis"
-	PendingStatus = "pending"
-	SuccessStatus = "success"
-	ErrorStatus   = "error"
-	FailureStatus = "failure"
 )
 
-func (g *GithubClient) UpdateStatus(repo models.Repo, pull models.PullRequest, status string, description string) {
-	repoStatus := github.RepoStatus{State: github.String(status), Description: github.String(description), Context: github.String(statusContext)}
+type Status int
+
+
+const (
+	Pending Status = iota
+	Success
+	Failure
+	Error
+)
+
+func (s Status) String() string {
+	switch s {
+	case Pending:
+		return "pending"
+	case Success:
+		return "success"
+	case Failure:
+		return "failure"
+	case Error:
+		return "error"
+	}
+	return "error"
+}
+
+func WorstStatus(ss []Status) Status {
+	if len(ss) == 0 {
+		return Success
+	}
+	worst := Success
+	for _, s := range ss {
+		if s > worst {
+			worst = s
+		}
+	}
+	return worst
+}
+
+func (g *GithubClient) UpdateStatus(repo models.Repo, pull models.PullRequest, status Status, description string) {
+	repoStatus := github.RepoStatus{State: github.String(status.String()), Description: github.String(description), Context: github.String(statusContext)}
 	g.client.Repositories.CreateStatus(g.ctx, repo.Owner, repo.Name, pull.HeadCommit, &repoStatus)
 	// todo: deal with error updating status
 }

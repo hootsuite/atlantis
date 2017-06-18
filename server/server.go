@@ -92,7 +92,7 @@ type ExecutionResult struct {
 
 type PathResult struct {
 	Path   string
-	Status string // todo: this should be an enum for success/error/failure
+	Status Status
 	Result Templater
 }
 

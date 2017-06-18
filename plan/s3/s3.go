@@ -68,7 +68,7 @@ func (b *Backend) CopyPlans(repoDir string, repoFullName string, env string, pul
 				Key:    obj.Key,
 			})
 		if err != nil {
-			return nil, errors.Wrapf(err, "downloading file at %b", *obj.Key)
+			return nil, errors.Wrapf(err, "downloading file at %s", *obj.Key)
 		}
 		plans = append(plans, plan.Plan{
 			Project: models.Project{
