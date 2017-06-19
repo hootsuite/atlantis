@@ -26,7 +26,6 @@ import (
 	"github.com/hootsuite/atlantis/plan"
 	"github.com/hootsuite/atlantis/plan/file"
 	"github.com/hootsuite/atlantis/plan/s3"
-	"github.com/hootsuite/atlantis/recovery"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
@@ -42,16 +41,13 @@ const (
 
 // Server listens for GitHub events and runs the necessary Atlantis command
 type Server struct {
-	router        *mux.Router
-	port          int
-	githubClient  *GithubClient
-	applyExecutor *ApplyExecutor
-	planExecutor  *PlanExecutor
-	helpExecutor  *HelpExecutor
-	logger        *logging.SimpleLogger
-	requestParser *RequestParser
-	lockingClient *locking.Client
-	atlantisURL   string
+	router         *mux.Router
+	port           int
+	commandHandler *CommandHandler
+	logger         *logging.SimpleLogger
+	eventParser    *EventParser
+	lockingClient  *locking.Client
+	atlantisURL    string
 }
 
 // the mapstructure tags correspond to flags in cmd/server.go
@@ -83,6 +79,7 @@ type CommandContext struct {
 	Log     *logging.SimpleLogger
 }
 
+// todo: These structs have nothing to do with the server. Move to a different file/package #refactor
 type ExecutionResult struct {
 	SetupError   Templater
 	SetupFailure Templater
@@ -107,6 +104,7 @@ type GeneralError struct {
 func (g GeneralError) Template() *CompiledTemplate {
 	return GeneralErrorTmpl
 }
+// todo: /end
 
 func NewServer(config ServerConfig) (*Server, error) {
 	tp := github.BasicAuthTransport{
@@ -184,18 +182,24 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 	helpExecutor := &HelpExecutor{}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
+	eventParser := &EventParser{}
+	commandHandler := &CommandHandler{
+		applyExecutor: applyExecutor,
+		planExecutor: planExecutor,
+		helpExecutor: helpExecutor,
+		eventParser: eventParser,
+		githubClient: githubClient,
+		logger: logger,
+	}
 	router := mux.NewRouter()
 	return &Server{
-		router:        router,
-		port:          config.Port,
-		applyExecutor: applyExecutor,
-		planExecutor:  planExecutor,
-		helpExecutor:  helpExecutor,
-		githubClient:  githubClient,
-		logger:        logger,
-		requestParser: &RequestParser{},
-		lockingClient: lockingClient,
-		atlantisURL:   config.AtlantisURL,
+		router:         router,
+		port:           config.Port,
+		commandHandler: commandHandler,
+		eventParser:    eventParser,
+		logger:         logger,
+		lockingClient:  lockingClient,
+		atlantisURL:    config.AtlantisURL,
 	}, nil
 }
 
@@ -214,11 +218,11 @@ func (s *Server) Start() error {
 
 	// function that planExecutor can use to construct delete lock urls
 	// injecting this here because this is the earliest routes are created
-	s.planExecutor.DeleteLockURL = func(lockID string) string {
+	s.commandHandler.SetDeleteLockURL(func(lockID string) string {
 		// ignoring error since guaranteed to succeed if "id" is specified
 		u, _ := deleteLockRoute.URL("id", url.QueryEscape(lockID))
 		return s.atlantisURL + u.RequestURI()
-	}
+	})
 	n := negroni.New(&negroni.Recovery{
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		PrintStack: false,
@@ -321,7 +325,7 @@ func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.P
 func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github.IssueCommentEvent, githubReqID string) {
 	// determine if the comment matches a plan or apply command
 	ctx := &CommandContext{}
-	command, err := s.requestParser.DetermineCommand(&comment)
+	command, err := s.eventParser.DetermineCommand(&comment)
 	if err != nil {
 		s.logger.Debug("Ignoring request: %v %s", err, githubReqID)
 		fmt.Fprintln(w, "Ignoring")
@@ -329,43 +333,14 @@ func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github
 	}
 	ctx.Command = command
 
-	if err = s.requestParser.ExtractCommentData(&comment, ctx); err != nil {
+	if err = s.eventParser.ExtractCommentData(&comment, ctx); err != nil {
 		s.logger.Err("Failed parsing event: %v %s", err, githubReqID)
 		fmt.Fprintln(w, "Ignoring")
 		return
 	}
 	// respond with success and then actually execute the command asynchronously
 	fmt.Fprintln(w, "Processing...")
-	go s.executeCommand(ctx)
-}
-
-func (s *Server) executeCommand(ctx *CommandContext) {
-	src := fmt.Sprintf("%s/pull/%d", ctx.Repo.FullName, ctx.Pull.Num)
-	// it's safe to reuse the underlying logger s.logger.Log
-	ctx.Log = logging.NewSimpleLogger(src, s.logger.Log, true, s.logger.Level)
-	defer s.recover(ctx)
-
-	// we've got data from the comment, now we need to get data from the actual PR
-	pull, _, err := s.githubClient.GetPullRequest(ctx.Repo, ctx.Pull.Num)
-	if err != nil {
-		ctx.Log.Err("pull request data api call failed: %v", err)
-		return
-	}
-	if err := s.requestParser.ExtractPullData(pull, ctx); err != nil {
-		ctx.Log.Err("failed to extract required fields from comment data: %v", err)
-		return
-	}
-
-	switch ctx.Command.commandType {
-	case Plan:
-		s.planExecutor.execute(ctx, s.githubClient)
-	case Apply:
-		s.applyExecutor.execute(ctx, s.githubClient)
-	case Help:
-		s.helpExecutor.execute(ctx, s.githubClient)
-	default:
-		ctx.Log.Err("failed to determine desired command, neither plan nor apply")
-	}
+	go s.commandHandler.ExecuteCommand(ctx)
 }
 
 func (s *Server) isCommentCreatedEvent(event github.IssueCommentEvent) bool {
@@ -376,11 +351,3 @@ func (s *Server) isPullClosedEvent(event github.PullRequestEvent) bool {
 	return event.Action != nil && *event.Action == "closed" && event.PullRequest != nil
 }
 
-// recover logs and creates a comment on the pull request for panics
-func (s *Server) recover(ctx *CommandContext) {
-	if err := recover(); err != nil {
-		stack := recovery.Stack(3)
-		s.githubClient.CreateComment(ctx, fmt.Sprintf("**Error: goroutine panic. This is a bug.**\n```\n%s\n%s```", err, stack))
-		ctx.Log.Err("PANIC: %s\n%s", err, stack)
-	}
-}

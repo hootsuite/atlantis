@@ -69,7 +69,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 		return res
 	}
 
-	// todo: reclone repo and switch branch, don't assume it's already there
+	// todo: reclone repo and switch branch, don't assume it'e already there
 	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num))
 	plans, err := a.planStorage.CopyPlans(repoDir, ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
 	if err != nil {
@@ -192,12 +192,6 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	}
 
 	ctx.Log.Info("running apply from %q", plan.Project.Path)
-
-	return PathResult{
-		Status: Success,
-		Result: ApplySuccess{"nice!@"},
-	}
-
 	terraformApplyCmdArgs, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, []string{"apply", "-no-color", plan.LocalPath}, []string{
 		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credVals.AccessKeyID),
 		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credVals.SecretAccessKey),
