@@ -6,13 +6,13 @@ import (
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/logging"
 	"github.com/hootsuite/atlantis/models"
+	"github.com/hootsuite/atlantis/plan"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
-	"github.com/hootsuite/atlantis/plan"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
@@ -409,5 +409,5 @@ func (a *PlanExecutor) updateGithubStatus(ctx *CommandContext, pathResults []Pat
 		statuses = append(statuses, p.Status)
 	}
 	worst := WorstStatus(statuses)
-	a.github.UpdateStatus(ctx.Repo, ctx.Pull, worst, "Plan " + worst.String())
+	a.github.UpdateStatus(ctx.Repo, ctx.Pull, worst, "Plan "+worst.String())
 }

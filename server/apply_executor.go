@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 
 	"github.com/hootsuite/atlantis/locking"
-	"strconv"
 	"github.com/hootsuite/atlantis/plan"
+	"strconv"
 )
 
 type ApplyExecutor struct {
@@ -219,7 +219,7 @@ func (a *ApplyExecutor) updateGithubStatus(ctx *CommandContext, pathResults []Pa
 		statuses = append(statuses, p.Status)
 	}
 	worst := WorstStatus(statuses)
-	a.github.UpdateStatus(ctx.Repo, ctx.Pull, worst, "Apply " + worst.String())
+	a.github.UpdateStatus(ctx.Repo, ctx.Pull, worst, "Apply "+worst.String())
 }
 
 func (a *ApplyExecutor) isApproved(ctx *CommandContext) (bool, ExecutionResult) {

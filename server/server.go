@@ -104,6 +104,7 @@ type GeneralError struct {
 func (g GeneralError) Template() *CompiledTemplate {
 	return GeneralErrorTmpl
 }
+
 // todo: /end
 
 func NewServer(config ServerConfig) (*Server, error) {
@@ -185,11 +186,11 @@ func NewServer(config ServerConfig) (*Server, error) {
 	eventParser := &EventParser{}
 	commandHandler := &CommandHandler{
 		applyExecutor: applyExecutor,
-		planExecutor: planExecutor,
-		helpExecutor: helpExecutor,
-		eventParser: eventParser,
-		githubClient: githubClient,
-		logger: logger,
+		planExecutor:  planExecutor,
+		helpExecutor:  helpExecutor,
+		eventParser:   eventParser,
+		githubClient:  githubClient,
+		logger:        logger,
 	}
 	router := mux.NewRouter()
 	return &Server{
@@ -350,4 +351,3 @@ func (s *Server) isCommentCreatedEvent(event github.IssueCommentEvent) bool {
 func (s *Server) isPullClosedEvent(event github.PullRequestEvent) bool {
 	return event.Action != nil && *event.Action == "closed" && event.PullRequest != nil
 }
-

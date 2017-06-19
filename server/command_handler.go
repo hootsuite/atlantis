@@ -6,13 +6,13 @@ import (
 	"github.com/hootsuite/atlantis/recovery"
 )
 
-type CommandHandler struct{
-	planExecutor *PlanExecutor
+type CommandHandler struct {
+	planExecutor  *PlanExecutor
 	applyExecutor *ApplyExecutor
-	helpExecutor *HelpExecutor
-	githubClient *GithubClient
-	eventParser *EventParser
-	logger *logging.SimpleLogger
+	helpExecutor  *HelpExecutor
+	githubClient  *GithubClient
+	eventParser   *EventParser
+	logger        *logging.SimpleLogger
 }
 
 type CommandType int
@@ -41,7 +41,7 @@ func (s *CommandHandler) ExecuteCommand(ctx *CommandContext) {
 		ctx.Log.Err("pull request data api call failed: %v", err)
 		return
 	}
-	pull, err := s.eventParser.ExtractPullData(ghPull);
+	pull, err := s.eventParser.ExtractPullData(ghPull)
 	if err != nil {
 		ctx.Log.Err("failed to extract required fields from comment data: %v", err)
 		return
@@ -72,4 +72,3 @@ func (s *CommandHandler) recover(ctx *CommandContext) {
 		ctx.Log.Err("PANIC: %s\n%s", err, stack)
 	}
 }
-

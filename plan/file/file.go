@@ -1,13 +1,13 @@
 package file
 
 import (
-	"path/filepath"
-	"os"
 	"github.com/hootsuite/atlantis/models"
-	"github.com/pkg/errors"
-	"strconv"
 	"github.com/hootsuite/atlantis/plan"
+	"github.com/pkg/errors"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
 )
 
 type Backend struct {
@@ -23,14 +23,13 @@ func New(baseDir string) (*Backend, error) {
 	return &Backend{baseDir}, nil
 }
 
-
 // save plans to baseDir/owner/repo/pullNum/path/env.tfplan
 func (b *Backend) SavePlan(path string, project models.Project, env string, pullNum int) error {
 	savePath := b.path(project, pullNum)
 	if err := os.MkdirAll(savePath, 0755); err != nil {
 		return errors.Wrap(err, "creating save directory")
 	}
-	if err := b.copy(path, filepath.Join(savePath, env + ".tfplan")); err != nil {
+	if err := b.copy(path, filepath.Join(savePath, env+".tfplan")); err != nil {
 		return errors.Wrap(err, "saving plan")
 	}
 	return nil
@@ -46,7 +45,7 @@ func (b *Backend) CopyPlans(dstRepo string, repoFullName string, env string, pul
 			return err
 		}
 		// if the plan is for the right env,
-		if info.Name() == env + ".tfplan" {
+		if info.Name() == env+".tfplan" {
 			rel, err := filepath.Rel(root, path)
 			if err == nil {
 				toCopy = append(toCopy, rel)
@@ -68,7 +67,7 @@ func (b *Backend) CopyPlans(dstRepo string, repoFullName string, env string, pul
 		}
 		plans = append(plans, plan.Plan{
 			Project: models.Project{
-				Path: filepath.Dir(file),
+				Path:         filepath.Dir(file),
 				RepoFullName: repoFullName,
 			},
 			LocalPath: dst,

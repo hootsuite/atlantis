@@ -4,7 +4,7 @@ import (
 	"github.com/hootsuite/atlantis/models"
 )
 
-type Backend interface{
+type Backend interface {
 	SavePlan(path string, project models.Project, env string, pullNum int) error
 	CopyPlans(dstRepoPath string, repoFullName string, env string, pullNum int) ([]Plan, error)
 }
@@ -14,5 +14,3 @@ type Plan struct {
 	// LocalPath is the path to the plan on disk
 	LocalPath string
 }
-
-

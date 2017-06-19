@@ -129,5 +129,5 @@ func (e *EventParser) ExtractPullData(pull *github.PullRequest) (models.PullRequ
 		HeadCommit: commit,
 		Link:       pullLink,
 		Num:        num,
-	} , nil
+	}, nil
 }
