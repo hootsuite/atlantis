@@ -159,7 +159,7 @@ Config values are overridden by environment variables which in turn are overridd
 		if configFile != "" {
 			viper.SetConfigFile(configFile)
 			if err := viper.ReadInConfig(); err != nil {
-				return fmt.Errorf("invalid config: reading %s: %s", configFile, err)
+				return errors.Wrapf(err, "invalid config: reading %s", configFile)
 			}
 		}
 		return nil

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"io/ioutil"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -29,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
+	"io/ioutil"
 )
 
 const (
@@ -285,33 +284,53 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 func (s *Server) postHooks(w http.ResponseWriter, r *http.Request) {
 	githubReqID := "X-Github-Delivery=" + r.Header.Get("X-Github-Delivery")
 
-	defer r.Body.Close()
-	bytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "could not read body: %s\n", err)
-		return
+	var payload []byte
+
+	// webhook requests can either be application/json or application/x-www-form-urlencoded
+	if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
+		// GitHub stores the json payload as a form value
+		payloadForm := r.PostFormValue("payload")
+		if payloadForm == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, "request did not contain expected 'payload' form value")
+			return
+
+		}
+		payload = []byte(payloadForm)
+	} else {
+		// else read it as json
+		defer r.Body.Close()
+		var err error
+		payload, err = ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "could not read body: %s", err)
+			return
+		}
 	}
 
-	// Try to unmarshal the request into the supported event types
-	var commentEvent github.IssueCommentEvent
-	var pullEvent github.PullRequestEvent
-	if json.Unmarshal(bytes, &commentEvent) == nil && s.isCommentCreatedEvent(commentEvent) {
-		s.logger.Debug("Handling comment event %s", githubReqID)
-		s.handleCommentCreatedEvent(w, commentEvent, githubReqID)
-	} else if json.Unmarshal(bytes, &pullEvent) == nil && s.isPullClosedEvent(pullEvent) {
-		s.logger.Debug("Handling pull request event %s", githubReqID)
-		s.handlePullClosedEvent(w, pullEvent, githubReqID)
-	} else {
+	event, _ := github.ParseWebHook(github.WebHookType(r), payload)
+	switch event := event.(type) {
+	case *github.IssueCommentEvent:
+		s.handleCommentEvent(w, event, githubReqID)
+	case *github.PullRequestEvent:
+		s.handlePullRequestEvent(w, event, githubReqID)
+	default:
 		s.logger.Debug("Ignoring unsupported event %s", githubReqID)
 		fmt.Fprintln(w, "Ignoring")
 	}
 }
 
-// handlePullClosedEvent will delete any locks associated with the pull request
-func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.PullRequestEvent, githubReqID string) {
-	repo := *pullEvent.Repo.FullName
-	pullNum := *pullEvent.PullRequest.Number
+// handlePullRequestEvent will delete any locks associated with the pull request
+func (s *Server) handlePullRequestEvent(w http.ResponseWriter, pullEvent *github.PullRequestEvent, githubReqID string) {
+	if pullEvent.GetAction() != "closed" {
+		s.logger.Debug("Ignoring pull request event since action was not closed %s", githubReqID)
+		fmt.Fprintln(w, "Ignoring")
+		return
+	}
+	repo := pullEvent.Repo.GetFullName()
+	pullNum := pullEvent.PullRequest.GetNumber()
+
 	s.logger.Debug("Unlocking locks for repo %s and pull %d %s", repo, pullNum, githubReqID)
 	err := s.lockingClient.UnlockByPull(repo, pullNum)
 	if err != nil {
@@ -323,10 +342,16 @@ func (s *Server) handlePullClosedEvent(w http.ResponseWriter, pullEvent github.P
 	fmt.Fprintln(w, "Locks unlocked")
 }
 
-func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github.IssueCommentEvent, githubReqID string) {
+func (s *Server) handleCommentEvent(w http.ResponseWriter, event *github.IssueCommentEvent, githubReqID string) {
+	if event.GetAction() != "created" {
+		s.logger.Debug("Ignoring comment event since action was not created %s", githubReqID)
+		fmt.Fprintln(w, "Ignoring")
+		return
+	}
+
 	// determine if the comment matches a plan or apply command
 	ctx := &CommandContext{}
-	command, err := s.eventParser.DetermineCommand(&comment)
+	command, err := s.eventParser.DetermineCommand(event)
 	if err != nil {
 		s.logger.Debug("Ignoring request: %v %s", err, githubReqID)
 		fmt.Fprintln(w, "Ignoring")
@@ -334,7 +359,7 @@ func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github
 	}
 	ctx.Command = command
 
-	if err = s.eventParser.ExtractCommentData(&comment, ctx); err != nil {
+	if err = s.eventParser.ExtractCommentData(event, ctx); err != nil {
 		s.logger.Err("Failed parsing event: %v %s", err, githubReqID)
 		fmt.Fprintln(w, "Ignoring")
 		return
@@ -342,12 +367,4 @@ func (s *Server) handleCommentCreatedEvent(w http.ResponseWriter, comment github
 	// respond with success and then actually execute the command asynchronously
 	fmt.Fprintln(w, "Processing...")
 	go s.commandHandler.ExecuteCommand(ctx)
-}
-
-func (s *Server) isCommentCreatedEvent(event github.IssueCommentEvent) bool {
-	return event.Action != nil && *event.Action == "created" && event.Comment != nil
-}
-
-func (s *Server) isPullClosedEvent(event github.PullRequestEvent) bool {
-	return event.Action != nil && *event.Action == "closed" && event.PullRequest != nil
 }

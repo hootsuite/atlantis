@@ -69,7 +69,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 		return res
 	}
 
-	// todo: reclone repo and switch branch, don't assume it'e already there
+	// todo: reclone repo and switch branch, don't assume it's already there
 	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num))
 	plans, err := a.planStorage.CopyPlans(repoDir, ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
 	if err != nil {
