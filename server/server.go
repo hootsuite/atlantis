@@ -275,9 +275,15 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "invalid lock id")
 	}
-	if err := s.lockingClient.Unlock(idUnencoded); err != nil {
+	lock, err := s.lockingClient.Unlock(idUnencoded)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, "Failed to unlock: %s", err)
+		return
+	}
+	if lock == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "No lock at that key")
 		return
 	}
 	fmt.Fprint(w, "Unlocked successfully")
@@ -335,14 +341,14 @@ func (s *Server) handlePullRequestEvent(w http.ResponseWriter, pullEvent *github
 	pullNum := pullEvent.PullRequest.GetNumber()
 
 	s.logger.Debug("Unlocking locks for repo %s and pull %d %s", repo, pullNum, githubReqID)
-	err := s.lockingClient.UnlockByPull(repo, pullNum)
+	locks, err := s.lockingClient.UnlockByPull(repo, pullNum)
 	if err != nil {
 		s.logger.Err("unlocking locks for repo %s pull %d: %v", repo, pullNum, err)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprintf(w, "Error unlocking locks: %v\n", err)
 		return
 	}
-	fmt.Fprintln(w, "Locks unlocked")
+	fmt.Fprintf(w, "Unlocked %d projects/environments", len(locks))
 }
 
 func (s *Server) handleCommentEvent(w http.ResponseWriter, event *github.IssueCommentEvent, githubReqID string) {
