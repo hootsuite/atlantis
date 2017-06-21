@@ -84,10 +84,59 @@ var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
         <br>
       </div>
       <div class="four columns">
-        <a class="button button-default" href="{{.UnlockURL}}">Discard Plan & Unlock</a>
+        <a class="button button-default" id="discardPlanUnlock">Discard Plan & Unlock</a>
       </div>
     </section>
   </div>
+  <div id="discardMessageModal" class="modal">
+    <!-- Modal content -->
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="close">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p><strong>Are you sure you want to discard the plan and unlock?</strong></p>
+        <input class="button-primary" id="discardYes" type="submit" value="Yes">
+        <input type="button" class="cancel" value="Cancel">
+      </div>
+    </div>
+  </div>
+<script>
+  // Get the modal
+  var modal = document.getElementById('discardMessageModal');
+
+  // Get the button that opens the modal
+  var btn = document.getElementById("discardPlanUnlock");
+  var btnDiscard = document.getElementById("discardYes");
+
+  // Get the <span> element that closes the modal
+  var span = document.getElementsByClassName("close")[0];
+  var cancelBtn = document.getElementsByClassName("cancel")[0];
+
+  // When the user clicks the button, open the modal 
+  btn.onclick = function() {
+      modal.style.display = "block";
+  }
+
+  // When the user clicks on <span> (x), close the modal
+  span.onclick = function() {
+      modal.style.display = "none";
+  }
+  cancelBtn.onclick = function() {
+    modal.style.display = "none";
+  }
+
+  btnDiscard.onclick = function() {
+    console.log("plan discarded and unlocked!");
+  }
+
+  // When the user clicks anywhere outside of the modal, close it
+  window.onclick = function(event) {
+      if (event.target == modal) {
+          modal.style.display = "none";
+      }
+  }
+</script>
 </body>
 </html>
 `))
