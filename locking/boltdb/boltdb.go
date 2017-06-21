@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/boltdb/bolt"
-	"github.com/hootsuite/atlantis/models"
-	"github.com/pkg/errors"
 	"os"
 	"path"
 	"time"
+
+	"github.com/boltdb/bolt"
+	"github.com/hootsuite/atlantis/models"
+	"github.com/pkg/errors"
 )
 
 type Backend struct {
@@ -143,6 +144,27 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 		}
 	}
 	return nil
+}
+
+func (b Backend) GetLockData(p models.Project, env string) (models.ProjectLock, error) {
+	key := b.key(p, env)
+	var lockDetailBytes []byte
+	err := b.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(b.bucket)
+		lockDetailBytes = b.Get([]byte(key))
+		return nil
+	})
+	if err != nil {
+		return models.ProjectLock{}, errors.Wrap(err, "failed to get lock detail")
+	}
+
+	var lockDetail models.ProjectLock
+	// deserialize bytes into the proper object
+	if err := json.Unmarshal(lockDetailBytes, &lockDetail); err != nil {
+		return models.ProjectLock{}, errors.Wrap(err, fmt.Sprintf("failed to deserialize lock at key %q", lockDetailBytes))
+	}
+
+	return lockDetail, nil
 }
 
 func (b Backend) key(p models.Project, env string) string {

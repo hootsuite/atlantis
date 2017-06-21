@@ -11,6 +11,8 @@ import (
 
 	"time"
 
+	"io/ioutil"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/google/go-github/github"
@@ -27,7 +29,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
-	"io/ioutil"
 )
 
 const (
@@ -213,6 +214,7 @@ func (s *Server) Start() error {
 	s.router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, AssetInfo: AssetInfo}))
 	s.router.HandleFunc("/hooks", s.postHooks).Methods("POST")
 	s.router.HandleFunc("/locks", s.deleteLock).Methods("DELETE").Queries("id", "{id:.*}")
+	s.router.HandleFunc("/detail", s.detail).Methods("GET").Queries("id", "{id}")
 	// todo: remove this route when there is a detail view
 	// right now we need this route because from the pull request comment in GitHub only a GET request can be made
 	// in the future, the pull discard link will link to the detail view which will have a Delete button which will
@@ -246,22 +248,66 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type lock struct {
-		UnlockURL    string
+		LockId       string
 		RepoFullName string
 		PullNum      int
 		Time         time.Time
 	}
 	var results []lock
 	for id, v := range locks {
-		u, _ := s.router.Get(deleteLockRoute).URL("id", url.QueryEscape(id))
 		results = append(results, lock{
-			UnlockURL:    u.String(),
+			LockId:       url.QueryEscape(id),
 			RepoFullName: v.Project.RepoFullName,
 			PullNum:      v.Pull.Num,
 			Time:         v.Time,
 		})
 	}
 	indexTemplate.Execute(w, results)
+}
+
+func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
+	id, ok := mux.Vars(r)["id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "no lock id in request")
+	}
+	// get details for lock id
+	idUnencoded, err := url.PathUnescape(id)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "invalid lock id")
+	}
+
+	// for the given lock key get details
+	detail, err := s.lockingClient.GetLockData(idUnencoded)
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+	}
+
+	type lockDetail struct {
+		UnlockURL       string
+		LockKey         string
+		RepoOwner       string
+		RepoName        string
+		PullRequestLink string
+		LockedBy        string
+		Environment     string
+		Time            time.Time
+	}
+
+	// extract the repo owner and repo name
+	repo := strings.Split(detail.Project.RepoFullName, "/")
+
+	l := lockDetail{
+		LockKey:         idUnencoded,
+		RepoOwner:       repo[0],
+		RepoName:        repo[1],
+		PullRequestLink: detail.Pull.URL,
+		LockedBy:        detail.Pull.Author,
+		Environment:     detail.Env,
+	}
+
+	detailTemplate.Execute(w, l)
 }
 
 func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {

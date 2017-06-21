@@ -3,9 +3,10 @@ package locking
 import (
 	"errors"
 	"fmt"
-	"github.com/hootsuite/atlantis/models"
 	"regexp"
 	"time"
+
+	"github.com/hootsuite/atlantis/models"
 )
 
 type Backend interface {
@@ -13,12 +14,13 @@ type Backend interface {
 	Unlock(project models.Project, env string) error
 	List() ([]models.ProjectLock, error)
 	UnlockByPull(repoFullName string, pullNum int) error
+	GetLockData(project models.Project, env string) (models.ProjectLock, error)
 }
 
 type TryLockResponse struct {
-	LockAcquired   bool
-	CurrLock models.ProjectLock
-	LockKey        string
+	LockAcquired bool
+	CurrLock     models.ProjectLock
+	LockKey      string
 }
 
 type Client struct {
@@ -36,11 +38,11 @@ var keyRegex = regexp.MustCompile(`^(.*?\/.*?)\/(.*)\/(.*)$`)
 
 func (c *Client) TryLock(p models.Project, env string, pull models.PullRequest, user models.User) (TryLockResponse, error) {
 	lock := models.ProjectLock{
-		Env: env,
-		Time: time.Now(),
+		Env:     env,
+		Time:    time.Now(),
 		Project: p,
-		User: user,
-		Pull: pull,
+		User:    user,
+		Pull:    pull,
 	}
 	lockAcquired, currLock, err := c.backend.TryLock(lock)
 	if err != nil {
@@ -71,6 +73,20 @@ func (c *Client) List() (map[string]models.ProjectLock, error) {
 
 func (c *Client) UnlockByPull(repoFullName string, pullNum int) error {
 	return c.backend.UnlockByPull(repoFullName, pullNum)
+}
+
+func (c *Client) GetLockData(key string) (models.ProjectLock, error) {
+	matches := keyRegex.FindStringSubmatch(key)
+	if len(matches) != 4 {
+		return models.ProjectLock{}, errors.New("invalid key format")
+	}
+
+	projectLock, err := c.backend.GetLockData(models.Project{matches[1], matches[2]}, matches[3])
+	if err != nil {
+		return models.ProjectLock{}, err
+	}
+
+	return projectLock, nil
 }
 
 func (c *Client) key(p models.Project, env string) string {

@@ -34,18 +34,60 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
     <p style="font-family: monospace, monospace; font-size: 1.0em; text-align: center;"><strong>Environments</strong></p>
     {{ if . }}
     {{ range . }}
-      <div class="twelve columns button content lock-row">
+      <a href="/detail?id={{.LockId}}">
+        <div class="twelve columns button content lock-row">
         <div class="list-title">{{.RepoFullName}} - <span class="heading-font-size">#{{.PullNum}}</span></div>
-        <div class="list-unlock"><button class="unlock"><a class="unlock-link" href="{{.UnlockURL}}">Unlock</a></button></div>
         <div class="list-status"><code>Locked</code></div>
         <div class="list-timestamp"><span class="heading-font-size">{{.Time}}</span></div>
-      </div>
+        </div>
+      </a>
     {{ end }}
     {{ else }}
     <p class="placeholder">No environments found.</p>
     {{ end }}
   </section>
 </div>
+</body>
+</html>
+`))
+
+var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>atlantis</title>
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/css/normalize.css">
+  <link rel="stylesheet" href="/static/css/skeleton.css">
+  <link rel="stylesheet" href="/static/css/custom.css">
+  <link rel="icon" type="image/png" href="/static/images/atlantis-icon.png">
+</head>
+<body>
+  <div class="container">
+    <section class="header">
+    <a title="atlantis" href="/"><img src="/static/images/atlantis-icon.png"/></a>
+    <p style="font-family: monospace, monospace; font-size: 1.1em; text-align: center;">atlantis</p>
+    <p style="font-family: monospace, monospace; font-size: 1.0em; text-align: center;"><strong>{{.LockKey}}</strong> <code>Locked</code></p>
+    </section>
+    <div class="navbar-spacer"></div>
+    <br>
+    <section>
+      <div class="eight columns">
+        <h6><code>Repo Owner</code>: <strong>{{.RepoOwner}}</strong></h6>
+        <h6><code>Repo Name</code>: <strong>{{.RepoName}}</strong></h6>
+        <h6><code>Pull Request Link</code>: <a href="{{.PullRequestLink}}" target="_blank"><strong>{{.PullRequestLink}}</strong></a></h6>
+        <h6><code>Locked By</code>: <strong>{{.LockedBy}}</strong></h6>
+        <h6><code>Environment</code>: <strong>{{.Environment}}</strong></h6>
+        <br>
+      </div>
+      <div class="four columns">
+        <a class="button button-default" href="{{.UnlockURL}}">Discard Plan & Unlock</a>
+      </div>
+    </section>
+  </div>
 </body>
 </html>
 `))
