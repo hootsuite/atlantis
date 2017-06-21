@@ -3,11 +3,11 @@ package server
 import (
 	"bytes"
 	"fmt"
-	"text/template"
 	"strings"
+	"text/template"
 )
 
-// GithubCommentRenderer renders responses as Github comments
+// GithubCommentRenderer renders responses as GitHub comments
 type GithubCommentRenderer struct{}
 
 // CompiledTemplate represents a single template with both its source text and its compiled

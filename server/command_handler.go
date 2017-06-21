@@ -25,7 +25,7 @@ const (
 )
 
 func (c CommandType) String() string {
-	switch c{
+	switch c {
 	case Apply:
 		return "apply"
 	case Plan:
