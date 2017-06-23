@@ -43,6 +43,7 @@ type Server struct {
 	router         *mux.Router
 	port           int
 	commandHandler *CommandHandler
+	pullClosedExecutor *PullClosedExecutor
 	logger         *logging.SimpleLogger
 	eventParser    *EventParser
 	lockingClient  *locking.Client
@@ -170,7 +171,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
 		requireApproval:       config.RequireApproval,
-		planStorage:           planBackend,
+		planBackend:           planBackend,
 	}
 	planExecutor := &PlanExecutor{
 		github:                githubClient,
@@ -181,9 +182,14 @@ func NewServer(config ServerConfig) (*Server, error) {
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
-		planStorage:           planBackend,
+		planBackend:           planBackend,
 	}
 	helpExecutor := &HelpExecutor{}
+	pullClosedExecutor := &PullClosedExecutor{
+		planBackend: planBackend,
+		github: githubClient,
+		locking: lockingClient,
+	}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	eventParser := &EventParser{}
 	commandHandler := &CommandHandler{
@@ -199,6 +205,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		router:         router,
 		port:           config.Port,
 		commandHandler: commandHandler,
+		pullClosedExecutor: pullClosedExecutor,
 		eventParser:    eventParser,
 		logger:         logger,
 		lockingClient:  lockingClient,
@@ -337,18 +344,29 @@ func (s *Server) handlePullRequestEvent(w http.ResponseWriter, pullEvent *github
 		fmt.Fprintln(w, "Ignoring")
 		return
 	}
-	repo := pullEvent.Repo.GetFullName()
-	pullNum := pullEvent.PullRequest.GetNumber()
-
-	s.logger.Debug("Unlocking locks for repo %s and pull %d %s", repo, pullNum, githubReqID)
-	locks, err := s.lockingClient.UnlockByPull(repo, pullNum)
+	pull, err := s.eventParser.ExtractPullData(pullEvent.PullRequest)
 	if err != nil {
-		s.logger.Err("unlocking locks for repo %s pull %d: %v", repo, pullNum, err)
-		w.WriteHeader(http.StatusServiceUnavailable)
-		fmt.Fprintf(w, "Error unlocking locks: %v\n", err)
+		s.logger.Err("parsing pull data: %s", err)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "error parsing request: %s", err)
 		return
 	}
-	fmt.Fprintf(w, "Unlocked %d projects/environments", len(locks))
+	repo, err := s.eventParser.ExtractRepoData(pullEvent.Repo)
+	if err != nil {
+		s.logger.Err("parsing repo data: %s", err)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "error parsing request: %s", err)
+		return
+	}
+
+	s.logger.Info("cleaning up locks and plans for repo %s and pull %d", repo.FullName, pull.Num)
+	if err := s.pullClosedExecutor.CleanUpPull(repo, pull); err != nil {
+		s.logger.Err("cleaning pull request: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error cleaning pull request: %s", err)
+		return
+	}
+	fmt.Fprint(w, "Pull request cleaned successfully")
 }
 
 func (s *Server) handleCommentEvent(w http.ResponseWriter, event *github.IssueCommentEvent, githubReqID string) {

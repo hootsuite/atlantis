@@ -24,7 +24,7 @@ type ApplyExecutor struct {
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
 	requireApproval       bool
-	planStorage           plan.Backend
+	planBackend           plan.Backend
 }
 
 /** Result Types **/
@@ -63,7 +63,7 @@ func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
 	res := a.setupAndApply(ctx)
 	res.Command = Apply
 	comment := a.githubCommentRenderer.render(res, ctx.Log.History.String(), ctx.Command.verbose)
-	github.CreateComment(ctx, comment)
+	github.CreateComment(ctx.Repo, ctx.Pull, comment)
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
@@ -73,7 +73,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 
 	// todo: reclone repo and switch branch, don't assume it's already there
 	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num))
-	plans, err := a.planStorage.CopyPlans(repoDir, ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
+	plans, err := a.planBackend.CopyPlans(repoDir, ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get plans: %s", err)
 		ctx.Log.Err(errMsg)

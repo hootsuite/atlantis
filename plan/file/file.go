@@ -15,8 +15,10 @@ type Backend struct {
 	baseDir string
 }
 
+const planPath = "plans"
+
 func New(baseDir string) (*Backend, error) {
-	baseDir = filepath.Clean(baseDir)
+	baseDir = filepath.Join(filepath.Clean(baseDir), planPath)
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return nil, err
 	}

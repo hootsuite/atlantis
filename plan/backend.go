@@ -16,9 +16,3 @@ type Plan struct {
 	// LocalPath is the path to the plan on disk
 	LocalPath string
 }
-
-type PlanKey struct {
-	Project models.Project
-	Env string
-	PullNum int
-}
