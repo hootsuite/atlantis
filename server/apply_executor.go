@@ -209,6 +209,9 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 
 	// clean up, delete local plan file
 	os.Remove(plan.LocalPath) // swallow errors, okay if we failed to delete
+	if err := a.planBackend.DeletePlan(plan.Project, ctx.Command.environment, ctx.Pull.Num); err != nil {
+		ctx.Log.Err("deleting plan for repo %s, path %s, env %s: %s", plan.Project.RepoFullName, plan.Project.Path, ctx.Command.environment, err)
+	}
 	return PathResult{
 		Status: Success,
 		Result: ApplySuccess{output},
