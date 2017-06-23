@@ -25,11 +25,11 @@ func New(baseDir string) (*Backend, error) {
 
 // save plans to baseDir/owner/repo/pullNum/path/env.tfplan
 func (b *Backend) SavePlan(path string, project models.Project, env string, pullNum int) error {
-	savePath := b.path(project, pullNum)
-	if err := os.MkdirAll(savePath, 0755); err != nil {
+	file := b.path(project, env, pullNum)
+	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
 		return errors.Wrap(err, "creating save directory")
 	}
-	if err := b.copy(path, filepath.Join(savePath, env+".tfplan")); err != nil {
+	if err := b.copy(path, file); err != nil {
 		return errors.Wrap(err, "saving plan")
 	}
 	return nil
@@ -76,6 +76,14 @@ func (b *Backend) CopyPlans(dstRepo string, repoFullName string, env string, pul
 	return plans, nil
 }
 
+func (b *Backend) DeletePlan(project models.Project, env string, pullNum int) error {
+	return os.Remove(b.path(project, env, pullNum))
+}
+
+func (b *Backend) DeletePlansByPull(repoFullName string, pullNum int) error {
+	return os.RemoveAll(filepath.Join(b.baseDir, repoFullName, strconv.Itoa(pullNum)))
+}
+
 func (b *Backend) copy(src string, dst string) error {
 	data, err := ioutil.ReadFile(src)
 	if err != nil {
@@ -88,6 +96,6 @@ func (b *Backend) copy(src string, dst string) error {
 	return nil
 }
 
-func (b *Backend) path(p models.Project, pullNum int) string {
-	return filepath.Join(b.baseDir, p.RepoFullName, strconv.Itoa(pullNum), p.Path)
+func (b *Backend) path(p models.Project, env string, pullNum int) string {
+	return filepath.Join(b.baseDir, p.RepoFullName, strconv.Itoa(pullNum), p.Path, env+".tfplan")
 }
