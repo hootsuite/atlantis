@@ -61,7 +61,7 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
 </html>
 `))
 
-var lockTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
+var lockTemplate = template.Must(template.New("lock.html.tmpl").Parse(`
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -114,31 +114,32 @@ var lockTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
   </div>
 <script>
   // Get the modal
-  var modal = document.getElementById('discardMessageModal');
-
+  var modal = $("#discardMessageModal");
+  
   // Get the button that opens the modal
-  var btn = document.getElementById("discardPlanUnlock");
-  var btnDiscard = document.getElementById("discardYes");
-  var lockId = btnDiscard.getAttribute('data');
+  var btn = $("#discardPlanUnlock");
+  var btnDiscard = $("#discardYes");
+  var lockId = btnDiscard.attr('data');
 
   // Get the <span> element that closes the modal
+  // using document.getElementsByClassName since jquery $("close") doesn't seem to work for btn click events
   var span = document.getElementsByClassName("close")[0];
   var cancelBtn = document.getElementsByClassName("cancel")[0];
 
   // When the user clicks the button, open the modal 
-  btn.onclick = function() {
-      modal.style.display = "block";
-  }
+  btn.click(function() {
+    modal.css("display", "block");
+  });
 
   // When the user clicks on <span> (x), close the modal
   span.onclick = function() {
-      modal.style.display = "none";
+    modal.css("display", "none");
   }
   cancelBtn.onclick = function() {
-    modal.style.display = "none";
+    modal.css("display", "none");
   }
 
-  btnDiscard.onclick = function() {
+  btnDiscard.click(function() {
     $.ajax({
         url: '/locks?id='+lockId,
         type: 'DELETE',
@@ -146,12 +147,12 @@ var lockTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
           window.location.replace("/?discard=true");
         }
     });
-  }
+  });
 
   // When the user clicks anywhere outside of the modal, close it
   window.onclick = function(event) {
       if (event.target == modal) {
-          modal.style.display = "none";
+          modal.css("display", "none");
       }
   }
 </script>
