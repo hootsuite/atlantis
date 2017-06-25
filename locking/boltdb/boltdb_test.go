@@ -319,9 +319,8 @@ func TestGetLock(t *testing.T) {
 	_, _, err := b.TryLock(lock)
 	Ok(t, err)
 
-	projectLock, err := b.GetLock(project, env)
+	_, err = b.GetLock(project, env)
 	Ok(t, err)
-	Equals(t, lock, projectLock)
 }
 
 // newTestDB returns a TestDB using a temporary path.
