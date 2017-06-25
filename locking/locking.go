@@ -14,7 +14,7 @@ type Backend interface {
 	Unlock(project models.Project, env string) error
 	List() ([]models.ProjectLock, error)
 	UnlockByPull(repoFullName string, pullNum int) error
-	GetLockData(project models.Project, env string) (models.ProjectLock, error)
+	GetLock(project models.Project, env string) (models.ProjectLock, error)
 }
 
 type TryLockResponse struct {
@@ -75,13 +75,13 @@ func (c *Client) UnlockByPull(repoFullName string, pullNum int) error {
 	return c.backend.UnlockByPull(repoFullName, pullNum)
 }
 
-func (c *Client) GetLockData(key string) (models.ProjectLock, error) {
+func (c *Client) GetLock(key string) (models.ProjectLock, error) {
 	matches := keyRegex.FindStringSubmatch(key)
 	if len(matches) != 4 {
 		return models.ProjectLock{}, errors.New("invalid key format")
 	}
 
-	projectLock, err := c.backend.GetLockData(models.Project{matches[1], matches[2]}, matches[3])
+	projectLock, err := c.backend.GetLock(models.Project{matches[1], matches[2]}, matches[3])
 	if err != nil {
 		return models.ProjectLock{}, err
 	}

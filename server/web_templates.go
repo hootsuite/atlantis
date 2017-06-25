@@ -13,6 +13,15 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
   <meta name="description" content="">
   <meta name="author" content="">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="/static/js/jquery-3.2.1.min.js"></script>
+  <script>
+    $(document).ready(function () {
+      $("p.discardSuccess").toggle(document.URL.indexOf("discard=true") !== -1);
+    });
+    setTimeout(function() {
+        $("p.discardSuccess").fadeOut('slow');
+    }, 5000); // <-- time in milliseconds
+  </script>
   <link rel="stylesheet" href="/static/css/normalize.css">
   <link rel="stylesheet" href="/static/css/skeleton.css">
   <link rel="stylesheet" href="/static/css/custom.css">
@@ -23,6 +32,7 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
   <section class="header">
     <a title="atlantis" href="/"><img src="/static/images/atlantis-icon.png"/></a>
     <p style="font-family: monospace, monospace; font-size: 1.1em; text-align: center;">atlantis</p>
+    <p class="discardSuccess" style="font-family: monospace, monospace; font-size: 1.1em; text-align: center;"><strong>Plan discarded and unlocked!</strong></p>
   </section>
   <nav class="navbar">
     <div class="container">
@@ -64,6 +74,7 @@ var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
   <link rel="stylesheet" href="/static/css/skeleton.css">
   <link rel="stylesheet" href="/static/css/custom.css">
   <link rel="icon" type="image/png" href="/static/images/atlantis-icon.png">
+  <script src="/static/js/jquery-3.2.1.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -96,7 +107,7 @@ var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
       </div>
       <div class="modal-body">
         <p><strong>Are you sure you want to discard the plan and unlock?</strong></p>
-        <input class="button-primary" id="discardYes" type="submit" value="Yes">
+        <input class="button-primary" id="discardYes" type="submit" value="Yes" data="{{.LockKeyEncoded}}">
         <input type="button" class="cancel" value="Cancel">
       </div>
     </div>
@@ -108,6 +119,7 @@ var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
   // Get the button that opens the modal
   var btn = document.getElementById("discardPlanUnlock");
   var btnDiscard = document.getElementById("discardYes");
+  var lockId = btnDiscard.getAttribute('data');
 
   // Get the <span> element that closes the modal
   var span = document.getElementsByClassName("close")[0];
@@ -127,7 +139,13 @@ var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
   }
 
   btnDiscard.onclick = function() {
-    console.log("plan discarded and unlocked!");
+    $.ajax({
+        url: '/locks?id='+lockId,
+        type: 'DELETE',
+        success: function(result) {
+          window.location.replace("/?discard=true");
+        }
+    });
   }
 
   // When the user clicks anywhere outside of the modal, close it

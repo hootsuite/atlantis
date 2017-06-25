@@ -3,15 +3,17 @@ package boltdb_test
 import (
 	. "github.com/hootsuite/atlantis/testing_util"
 
-	"github.com/boltdb/bolt"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/boltdb/bolt"
+	"github.com/pkg/errors"
+
+	"time"
+
 	"github.com/hootsuite/atlantis/locking/boltdb"
 	"github.com/hootsuite/atlantis/models"
-	"time"
 )
 
 var lockBucket = "bucket"
@@ -25,9 +27,9 @@ var lock = models.ProjectLock{
 	User: models.User{
 		Username: "lkysow",
 	},
-	Env: env,
+	Env:     env,
 	Project: project,
-	Time: time.Now(),
+	Time:    time.Now(),
 }
 
 func TestListNoLocks(t *testing.T) {
@@ -300,6 +302,19 @@ func TestUnlockByPullMatching(t *testing.T) {
 	ls, err = b.List()
 	Ok(t, err)
 	Equals(t, 0, len(ls))
+}
+
+// Write more tests for getting lock data
+func TestGetLock(t *testing.T) {
+	t.Log("get data for a existing lock")
+	db, b := newTestDB()
+	defer cleanupDB(db)
+	_, _, err := b.TryLock(lock)
+	Ok(t, err)
+
+	projectLock, err := b.GetLock(project, env)
+	Ok(t, err)
+	Equals(t, lock, projectLock)
 }
 
 // newTestDB returns a TestDB using a temporary path.

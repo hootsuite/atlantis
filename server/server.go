@@ -214,18 +214,12 @@ func (s *Server) Start() error {
 	s.router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, AssetInfo: AssetInfo}))
 	s.router.HandleFunc("/hooks", s.postHooks).Methods("POST")
 	s.router.HandleFunc("/locks", s.deleteLock).Methods("DELETE").Queries("id", "{id:.*}")
-	s.router.HandleFunc("/detail", s.detail).Methods("GET").Queries("id", "{id}")
-	// todo: remove this route when there is a detail view
-	// right now we need this route because from the pull request comment in GitHub only a GET request can be made
-	// in the future, the pull discard link will link to the detail view which will have a Delete button which will
-	// make an real DELETE call but we don't have a detail view right now
-	deleteLockRoute := s.router.HandleFunc("/locks", s.deleteLock).Queries("id", "{id}", "method", "DELETE").Methods("GET").Name(deleteLockRoute)
-
-	// function that planExecutor can use to construct delete lock urls
+	detailRoute := s.router.HandleFunc("/detail", s.detail).Methods("GET").Queries("id", "{id}")
+	// function that planExecutor can use to construct detail view url
 	// injecting this here because this is the earliest routes are created
-	s.commandHandler.SetDeleteLockURL(func(lockID string) string {
+	s.commandHandler.SetDetailURL(func(lockID string) string {
 		// ignoring error since guaranteed to succeed if "id" is specified
-		u, _ := deleteLockRoute.URL("id", url.QueryEscape(lockID))
+		u, _ := detailRoute.URL("id", url.QueryEscape(lockID))
 		return s.atlantisURL + u.RequestURI()
 	})
 	n := negroni.New(&negroni.Recovery{
@@ -279,13 +273,14 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// for the given lock key get details
-	detail, err := s.lockingClient.GetLockData(idUnencoded)
+	detail, err := s.lockingClient.GetLock(idUnencoded)
 	if err != nil {
 		fmt.Fprint(w, err.Error())
 	}
 
 	type lockDetail struct {
 		UnlockURL       string
+		LockKeyEncoded  string
 		LockKey         string
 		RepoOwner       string
 		RepoName        string
@@ -299,6 +294,7 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	repo := strings.Split(detail.Project.RepoFullName, "/")
 
 	l := lockDetail{
+		LockKeyEncoded:  id,
 		LockKey:         idUnencoded,
 		RepoOwner:       repo[0],
 		RepoName:        repo[1],

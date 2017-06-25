@@ -146,7 +146,7 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 	return nil
 }
 
-func (b Backend) GetLockData(p models.Project, env string) (models.ProjectLock, error) {
+func (b Backend) GetLock(p models.Project, env string) (models.ProjectLock, error) {
 	key := b.key(p, env)
 	var lockDetailBytes []byte
 	err := b.db.View(func(tx *bolt.Tx) error {

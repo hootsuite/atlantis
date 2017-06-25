@@ -132,8 +132,29 @@ func (b Backend) List() ([]models.ProjectLock, error) {
 	return locks, errors.Wrap(err, "scanning dynamodb")
 }
 
-func (b Backend) GetLockData(p models.Project, env string) (models.ProjectLock, error) {
-	return models.ProjectLock{}, nil
+func (b Backend) GetLock(p models.Project, env string) (models.ProjectLock, error) {
+	key := b.key(p, env)
+	params := &dynamodb.GetItemInput{
+		Key: map[string]*dynamodb.AttributeValue{
+			"LockKey": {
+				S: aws.String(key),
+			},
+		},
+		TableName:      aws.String(b.LockTable),
+		ConsistentRead: aws.Bool(true),
+	}
+	item, err := b.DB.GetItem(params)
+	if err != nil {
+		return models.ProjectLock{}, errors.Wrap(err, "error getting item")
+	}
+
+	var dynamoDBLock dynamoLock
+	if err := dynamodbattribute.UnmarshalMap(item.Item, &dynamoDBLock); err != nil {
+		return models.ProjectLock{}, errors.Wrap(err, "found a lock at that key but it could not be deserialized. We suggest manually deleting this key from DynamoDB")
+	}
+
+	return b.fromDynamo(dynamoDBLock), nil
+
 }
 
 func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
