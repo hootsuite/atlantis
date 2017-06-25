@@ -21,6 +21,8 @@ test:
   override:
     # Run tests
     - cd "${WORKDIR}" && ./scripts/build.sh
+  
+  post:
     # Run e2e tests
     - cd "${WORKDIR}" && ./scripts/e2e-deps.sh
     # Start atlantis server
