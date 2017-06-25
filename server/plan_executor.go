@@ -29,7 +29,7 @@ type PlanExecutor struct {
 	lockingClient         *locking.Client
 	// LockURL is a function that given a lock id will return a url for detail view
 	LockURL     func(id string) (url string)
-	planStorage plan.Backend
+	planBackend plan.Backend
 }
 
 /** Result Types **/
