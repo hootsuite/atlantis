@@ -214,12 +214,12 @@ func (s *Server) Start() error {
 	s.router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, AssetInfo: AssetInfo}))
 	s.router.HandleFunc("/hooks", s.postHooks).Methods("POST")
 	s.router.HandleFunc("/locks", s.deleteLock).Methods("DELETE").Queries("id", "{id:.*}")
-	detailRoute := s.router.HandleFunc("/detail", s.detail).Methods("GET").Queries("id", "{id}")
+	lockRoute := s.router.HandleFunc("/lock", s.lock).Methods("GET").Queries("id", "{id}")
 	// function that planExecutor can use to construct detail view url
 	// injecting this here because this is the earliest routes are created
-	s.commandHandler.SetDetailURL(func(lockID string) string {
+	s.commandHandler.SetLockURL(func(lockID string) string {
 		// ignoring error since guaranteed to succeed if "id" is specified
-		u, _ := detailRoute.URL("id", url.QueryEscape(lockID))
+		u, _ := lockRoute.URL("id", url.QueryEscape(lockID))
 		return s.atlantisURL + u.RequestURI()
 	})
 	n := negroni.New(&negroni.Recovery{
@@ -242,7 +242,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type lock struct {
-		LockId       string
+		LockURL      string
 		RepoFullName string
 		PullNum      int
 		Time         time.Time
@@ -250,7 +250,8 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	var results []lock
 	for id, v := range locks {
 		results = append(results, lock{
-			LockId:       url.QueryEscape(id),
+			// todo: make LockURL use the router to get /lock endpoint
+			LockURL:      fmt.Sprintf("/lock?id=%s", url.QueryEscape(id)),
 			RepoFullName: v.Project.RepoFullName,
 			PullNum:      v.Pull.Num,
 			Time:         v.Time,
@@ -259,26 +260,27 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	indexTemplate.Execute(w, results)
 }
 
-func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
+func (s *Server) lock(w http.ResponseWriter, r *http.Request) {
 	id, ok := mux.Vars(r)["id"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "no lock id in request")
 	}
 	// get details for lock id
-	idUnencoded, err := url.PathUnescape(id)
+	idUnencoded, err := url.QueryUnescape(id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "invalid lock id")
 	}
 
-	// for the given lock key get details
-	detail, err := s.lockingClient.GetLock(idUnencoded)
+	// for the given lock key get lock data
+	lock, err := s.lockingClient.GetLock(idUnencoded)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err.Error())
 	}
 
-	type lockDetail struct {
+	type lockData struct {
 		UnlockURL       string
 		LockKeyEncoded  string
 		LockKey         string
@@ -291,19 +293,19 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// extract the repo owner and repo name
-	repo := strings.Split(detail.Project.RepoFullName, "/")
+	repo := strings.Split(lock.Project.RepoFullName, "/")
 
-	l := lockDetail{
+	l := lockData{
 		LockKeyEncoded:  id,
 		LockKey:         idUnencoded,
 		RepoOwner:       repo[0],
 		RepoName:        repo[1],
-		PullRequestLink: detail.Pull.URL,
-		LockedBy:        detail.Pull.Author,
-		Environment:     detail.Env,
+		PullRequestLink: lock.Pull.URL,
+		LockedBy:        lock.Pull.Author,
+		Environment:     lock.Env,
 	}
 
-	detailTemplate.Execute(w, l)
+	lockTemplate.Execute(w, l)
 }
 
 func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {

@@ -304,7 +304,7 @@ func TestUnlockByPullMatching(t *testing.T) {
 	Equals(t, 0, len(ls))
 }
 
-// Write more tests for getting lock data
+// todo: Write more tests for getting lock data
 func TestGetLock(t *testing.T) {
 	t.Log("get data for a existing lock")
 	db, b := newTestDB()

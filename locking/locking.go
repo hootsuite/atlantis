@@ -52,11 +52,12 @@ func (c *Client) TryLock(p models.Project, env string, pull models.PullRequest, 
 }
 
 func (c *Client) Unlock(key string) error {
-	matches := keyRegex.FindStringSubmatch(key)
-	if len(matches) != 4 {
-		return errors.New("invalid key format")
+	project, env, err := c.lockKeyToProjectEnv(key)
+	if err != nil {
+		return err
 	}
-	return c.backend.Unlock(models.Project{matches[1], matches[2]}, matches[3])
+
+	return c.backend.Unlock(project, env)
 }
 
 func (c *Client) List() (map[string]models.ProjectLock, error) {
@@ -76,12 +77,12 @@ func (c *Client) UnlockByPull(repoFullName string, pullNum int) error {
 }
 
 func (c *Client) GetLock(key string) (models.ProjectLock, error) {
-	matches := keyRegex.FindStringSubmatch(key)
-	if len(matches) != 4 {
-		return models.ProjectLock{}, errors.New("invalid key format")
+	project, env, err := c.lockKeyToProjectEnv(key)
+	if err != nil {
+		return models.ProjectLock{}, err
 	}
 
-	projectLock, err := c.backend.GetLock(models.Project{matches[1], matches[2]}, matches[3])
+	projectLock, err := c.backend.GetLock(project, env)
 	if err != nil {
 		return models.ProjectLock{}, err
 	}
@@ -91,4 +92,13 @@ func (c *Client) GetLock(key string) (models.ProjectLock, error) {
 
 func (c *Client) key(p models.Project, env string) string {
 	return fmt.Sprintf("%s/%s/%s", p.RepoFullName, p.Path, env)
+}
+
+func (c *Client) lockKeyToProjectEnv(key string) (models.Project, string, error) {
+	matches := keyRegex.FindStringSubmatch(key)
+	if len(matches) != 4 {
+		return models.Project{}, "", errors.New("invalid key format")
+	}
+
+	return models.Project{matches[1], matches[2]}, matches[3], nil
 }

@@ -128,7 +128,7 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 		for k, v := c.Seek([]byte(repoFullName)); k != nil && bytes.HasPrefix(k, []byte(repoFullName)); k, v = c.Next() {
 			var lock models.ProjectLock
 			if err := json.Unmarshal(v, &lock); err != nil {
-				return errors.Wrapf(err, "failed to deserialize lock at key %q", string(k))
+				return errors.Wrapf(err, "deserializing lock at key %q", string(k))
 			}
 			if lock.Pull.Num == pullNum {
 				locks = append(locks, lock)
@@ -148,23 +148,22 @@ func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
 
 func (b Backend) GetLock(p models.Project, env string) (models.ProjectLock, error) {
 	key := b.key(p, env)
-	var lockDetailBytes []byte
+	var lockBytes []byte
 	err := b.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(b.bucket)
-		lockDetailBytes = b.Get([]byte(key))
+		lockBytes = b.Get([]byte(key))
 		return nil
 	})
 	if err != nil {
-		return models.ProjectLock{}, errors.Wrap(err, "failed to get lock detail")
+		return models.ProjectLock{}, errors.Wrap(err, "getting lock data")
 	}
 
-	var lockDetail models.ProjectLock
-	// deserialize bytes into the proper object
-	if err := json.Unmarshal(lockDetailBytes, &lockDetail); err != nil {
-		return models.ProjectLock{}, errors.Wrap(err, fmt.Sprintf("failed to deserialize lock at key %q", lockDetailBytes))
+	var lock models.ProjectLock
+	if err := json.Unmarshal(lockBytes, &lock); err != nil {
+		return models.ProjectLock{}, errors.Wrapf(err, "deserializing lock at key %q", key)
 	}
 
-	return lockDetail, nil
+	return lock, nil
 }
 
 func (b Backend) key(p models.Project, env string) string {

@@ -74,8 +74,8 @@ func (s *CommandHandler) ExecuteCommand(ctx *CommandContext) {
 	}
 }
 
-func (s *CommandHandler) SetDetailURL(f func(id string) (url string)) {
-	s.planExecutor.DetailUrl = f
+func (s *CommandHandler) SetLockURL(f func(id string) (url string)) {
+	s.planExecutor.LockURL = f
 }
 
 // recover logs and creates a comment on the pull request for panics

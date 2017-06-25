@@ -16,10 +16,10 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
   <script src="/static/js/jquery-3.2.1.min.js"></script>
   <script>
     $(document).ready(function () {
-      $("p.discardSuccess").toggle(document.URL.indexOf("discard=true") !== -1);
+      $("p.js-discard-success").toggle(document.URL.indexOf("discard=true") !== -1);
     });
     setTimeout(function() {
-        $("p.discardSuccess").fadeOut('slow');
+        $("p.js-discard-success").fadeOut('slow');
     }, 5000); // <-- time in milliseconds
   </script>
   <link rel="stylesheet" href="/static/css/normalize.css">
@@ -31,8 +31,8 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
 <div class="container">
   <section class="header">
     <a title="atlantis" href="/"><img src="/static/images/atlantis-icon.png"/></a>
-    <p style="font-family: monospace, monospace; font-size: 1.1em; text-align: center;">atlantis</p>
-    <p class="discardSuccess" style="font-family: monospace, monospace; font-size: 1.1em; text-align: center;"><strong>Plan discarded and unlocked!</strong></p>
+    <p class="title-heading">atlantis</p>
+    <p class="js-discard-success"><strong>Plan discarded and unlocked!</strong></p>
   </section>
   <nav class="navbar">
     <div class="container">
@@ -41,10 +41,10 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
   <div class="navbar-spacer"></div>
   <br>
   <section>
-    <p style="font-family: monospace, monospace; font-size: 1.0em; text-align: center;"><strong>Environments</strong></p>
+    <p class="title-heading small"><strong>Environments</strong></p>
     {{ if . }}
     {{ range . }}
-      <a href="/detail?id={{.LockId}}">
+      <a href="{{.LockURL}}">
         <div class="twelve columns button content lock-row">
         <div class="list-title">{{.RepoFullName}} - <span class="heading-font-size">#{{.PullNum}}</span></div>
         <div class="list-status"><code>Locked</code></div>
@@ -61,7 +61,7 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
 </html>
 `))
 
-var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
+var lockTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,8 +80,8 @@ var detailTemplate = template.Must(template.New("detail.html.tmpl").Parse(`
   <div class="container">
     <section class="header">
     <a title="atlantis" href="/"><img src="/static/images/atlantis-icon.png"/></a>
-    <p style="font-family: monospace, monospace; font-size: 1.1em; text-align: center;">atlantis</p>
-    <p style="font-family: monospace, monospace; font-size: 1.0em; text-align: center;"><strong>{{.LockKey}}</strong> <code>Locked</code></p>
+    <p class="title-heading">atlantis</p>
+    <p class="title-heading"><strong>{{.LockKey}}</strong> <code>Locked</code></p>
     </section>
     <div class="navbar-spacer"></div>
     <br>

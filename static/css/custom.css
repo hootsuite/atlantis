@@ -297,3 +297,15 @@ tbody {
     from {top: -300px; opacity: 0}
     to {top: 0; opacity: 1}
 }
+
+.js-discard-success {
+  font-family: monospace, monospace; font-size: 1.1em; text-align: center;
+}
+
+.title-heading {
+  font-family: monospace, monospace; font-size: 1.1em; text-align: center;
+ } 
+
+.small {
+  font-size: 1.0em;
+}

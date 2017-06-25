@@ -27,8 +27,8 @@ type PlanExecutor struct {
 	terraform             *TerraformClient
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
-	// DetailUrl is a function that given a lock id will return a url for detail view
-	DetailUrl   func(id string) (url string)
+	// LockURL is a function that given a lock id will return a url for detail view
+	LockURL     func(id string) (url string)
 	planStorage plan.Backend
 }
 
@@ -315,7 +315,7 @@ func (p *PlanExecutor) plan(
 		Status: Success,
 		Result: PlanSuccess{
 			TerraformOutput: output,
-			LockURL:         p.DetailUrl(lockAttempt.LockKey),
+			LockURL:         p.LockURL(lockAttempt.LockKey),
 		},
 	}
 }

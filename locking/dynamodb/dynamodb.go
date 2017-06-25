@@ -145,7 +145,7 @@ func (b Backend) GetLock(p models.Project, env string) (models.ProjectLock, erro
 	}
 	item, err := b.DB.GetItem(params)
 	if err != nil {
-		return models.ProjectLock{}, errors.Wrap(err, "error getting item")
+		return models.ProjectLock{}, errors.Wrapf(err, "getting item %q", item)
 	}
 
 	var dynamoDBLock dynamoLock
@@ -154,7 +154,6 @@ func (b Backend) GetLock(p models.Project, env string) (models.ProjectLock, erro
 	}
 
 	return b.fromDynamo(dynamoDBLock), nil
-
 }
 
 func (b Backend) UnlockByPull(repoFullName string, pullNum int) error {
