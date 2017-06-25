@@ -151,6 +151,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	}
 
 	var config Config
+	tfVersion := p.terraform.tfVersion
 	planOutputs := []PathResult{}
 	for _, project := range projects {
 		// check if config file is found, if not we continue the run
@@ -163,22 +164,32 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 				ctx.Log.Err(errMsg)
 				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 			}
-			// need to use the remote state path and backend to do remote configure
-			err = PreRun(&config, ctx.Log, absolutePath, ctx.Command)
+
+			// check if terraform version is specified in config
+			if config.TerraformVersion != "" {
+				tfVersion = config.TerraformVersion
+				p.terraform.tfExecutableName = "terraform" + config.TerraformVersion
+			} else {
+				p.terraform.tfExecutableName = "terraform"
+			}
+
+			preRun := &PreRun{
+				Commands:         config.PrePlan.Commands,
+				Path:             absolutePath,
+				Environment:      ctx.Command.environment,
+				TerraformVersion: tfVersion,
+			}
+
+			preRunOutput, err := preRun.Start()
 			if err != nil {
 				errMsg := fmt.Sprintf("pre run failed: %v", err)
 				ctx.Log.Err(errMsg)
 				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 			}
 
-			// check if terraform version is specified in config
-			if config.TerraformVersion != "" {
-				p.terraform.tfExecutableName = "terraform" + config.TerraformVersion
-			} else {
-				p.terraform.tfExecutableName = "terraform"
-			}
+			ctx.Log.Info("Pre run output: \n%s", preRunOutput)
 		}
-		generatePlanResponse := p.plan(ctx, cloneDir, p.scratchDir, project, p.sshKey, config.StashPath)
+		generatePlanResponse := p.plan(ctx, cloneDir, p.scratchDir, project, p.sshKey)
 		generatePlanResponse.Path = project.Path
 		planOutputs = append(planOutputs, generatePlanResponse)
 	}
@@ -193,20 +204,9 @@ func (p *PlanExecutor) plan(
 	repoDir string,
 	planOutDir string,
 	project models.Project,
-	sshKey string,
-	stashPath string) PathResult {
+	sshKey string) PathResult {
 	ctx.Log.Info("generating plan for path %q", project.Path)
 
-	// NOTE: THIS CODE IS TO SUPPORT TERRAFORM PROJECTS THAT AREN'T USING ATLANTIS CONFIG FILE.
-	if stashPath == "" {
-		_, err := p.terraform.ConfigureRemoteState(ctx.Log, repoDir, project, ctx.Command.environment, sshKey)
-		if err != nil {
-			return PathResult{
-				Status: Error,
-				Result: GeneralError{fmt.Errorf("failed to configure remote state: %s", err)},
-			}
-		}
-	}
 	// todo: setting environment to default should be done elsewhere
 	tfEnv := ctx.Command.environment
 	if tfEnv == "" {
@@ -384,11 +384,6 @@ func (p *PlanExecutor) CleanWorkspace(log *logging.SimpleLogger, deleteFilesPref
 		}
 	}
 	return nil
-}
-
-// todo: make OO
-func generateStatePath(path string, tfEnvName string) string {
-	return strings.Replace(path, "$ENVIRONMENT", tfEnvName, -1)
 }
 
 func (p *PlanExecutor) setupError(ctx *CommandContext, err error) ExecutionResult {

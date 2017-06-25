@@ -100,7 +100,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 
 func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Plan) PathResult {
 	var config Config
-	var remoteStatePath string
+	tfVersion := a.terraform.tfVersion
 	// check if config file is found, if not we continue the run
 	projectAbsolutePath := filepath.Dir(plan.LocalPath)
 	if config.Exists(projectAbsolutePath) {
@@ -114,8 +114,23 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 				Result: GeneralError{errors.New(msg)},
 			}
 		}
-		// need to use the remote state path and backend to do remote configure
-		err = PreRun(&config, ctx.Log, projectAbsolutePath, ctx.Command)
+
+		// check if terraform version is specified in config
+		if config.TerraformVersion != "" {
+			tfVersion = config.TerraformVersion
+			a.terraform.tfExecutableName = "terraform" + config.TerraformVersion
+		} else {
+			a.terraform.tfExecutableName = "terraform"
+		}
+
+		preRun := &PreRun{
+			Commands:         config.PreApply.Commands,
+			Path:             projectAbsolutePath,
+			Environment:      ctx.Command.environment,
+			TerraformVersion: tfVersion,
+		}
+
+		preRunOutput, err := preRun.Start()
 		if err != nil {
 			msg := fmt.Sprintf("pre run failed: %v", err)
 			ctx.Log.Err(msg)
@@ -124,50 +139,27 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 				Result: GeneralError{errors.New(msg)},
 			}
 		}
-		// check if terraform version is specified in config
-		if config.TerraformVersion != "" {
-			a.terraform.tfExecutableName = "terraform" + config.TerraformVersion
-		} else {
-			a.terraform.tfExecutableName = "terraform"
-		}
+
+		ctx.Log.Info("Pre run output: \n%s", preRunOutput)
+
 	}
 
-	// NOTE: THIS CODE IS TO SUPPORT TERRAFORM PROJECTS THAT AREN'T USING ATLANTIS CONFIG FILE.
-	if config.StashPath == "" {
-		// configure remote state
-		statePath, err := a.terraform.ConfigureRemoteState(ctx.Log, repoDir, plan.Project, ctx.Command.environment, a.sshKey)
-		if err != nil {
-			msg := fmt.Sprintf("failed to set up remote state: %v", err)
-			ctx.Log.Err(msg)
-			return PathResult{
-				Status: Error,
-				Result: GeneralError{errors.New(msg)},
-			}
-		}
-		remoteStatePath = statePath
-	} else {
-		// use state path from config file
-		remoteStatePath = generateStatePath(config.StashPath, ctx.Command.environment)
+	tfEnv := ctx.Command.environment
+	if tfEnv == "" {
+		tfEnv = "default"
 	}
 
-	if remoteStatePath != "" {
-		tfEnv := ctx.Command.environment
-		if tfEnv == "" {
-			tfEnv = "default"
+	lockAttempt, err := a.lockingClient.TryLock(plan.Project, tfEnv, ctx.Pull, ctx.User)
+	if err != nil {
+		return PathResult{
+			Status: Error,
+			Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
 		}
-
-		lockAttempt, err := a.lockingClient.TryLock(plan.Project, tfEnv, ctx.Pull, ctx.User)
-		if err != nil {
-			return PathResult{
-				Status: Error,
-				Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
-			}
-		}
-		if lockAttempt.LockAcquired != true && lockAttempt.CurrLock.Pull.Num != ctx.Pull.Num {
-			return PathResult{
-				Status: Error,
-				Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.CurrLock.Pull.Num)},
-			}
+	}
+	if lockAttempt.LockAcquired != true && lockAttempt.CurrLock.Pull.Num != ctx.Pull.Num {
+		return PathResult{
+			Status: Error,
+			Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.CurrLock.Pull.Num)},
 		}
 	}
 

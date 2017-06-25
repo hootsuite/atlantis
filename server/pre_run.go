@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"fmt"
-	"github.com/hootsuite/atlantis/logging"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -11,53 +10,46 @@ import (
 
 const InlineShebang = "/bin/sh -e"
 
-// todo: make OO
-// PreRun is a function that will determine whether
-func PreRun(c *Config, log *logging.SimpleLogger, path string, command *Command) error {
-	log.Info("Staring pre run in %s", path)
+type PreRun struct {
+	Commands         []string
+	Path             string
+	Environment      string
+	TerraformVersion string
+}
+
+// Start is the function that starts the pre run
+func (p *PreRun) Start() (string, error) {
 	var execScript string
 
-	if command.commandType == Plan {
-		// we create a script from the commands provided
-		s, err := createScript(c.PrePlan.Commands)
-		if err != nil {
-			return err
-		}
-		execScript = s
+	// we create a script from the commands provided
+	s, err := p.createScript(p.Commands)
+	if err != nil {
+		return "", err
 	}
-	if command.commandType == Apply {
-		// we create a script from the commands provided
-		s, err := createScript(c.PreApply.Commands)
-		if err != nil {
-			return err
-		}
-		execScript = s
-	}
+	execScript = s
 
+	var output string
 	if execScript != "" {
 		defer os.Remove(execScript)
-		log.Info("Running script %s", execScript)
 		// set environment variable for the run.
-		// this is to support scripts to use the ENVIRONMENT and WORKSPACE variables in their scripts
-		if command.environment != "" {
-			os.Setenv("ENVIRONMENT", command.environment)
+		// this is to support scripts to use the ENVIRONMENT, ATLANTIS_TERRAFORM_VERSION
+		// and WORKSPACE variables in their scripts
+		if p.Environment != "" {
+			os.Setenv("ENVIRONMENT", p.Environment)
 		}
-		if c.TerraformVersion != "" {
-			os.Setenv("ATLANTIS_TERRAFORM_VERSION", c.TerraformVersion)
+		if p.TerraformVersion != "" {
+			os.Setenv("ATLANTIS_TERRAFORM_VERSION", p.TerraformVersion)
 		}
-		os.Setenv("WORKSPACE", path)
-		output, err := execute(execScript)
-		if err != nil {
-			return err
-		}
-		log.Info("output: \n%s", output)
+		os.Setenv("WORKSPACE", p.Path)
+
+		return p.execute(execScript)
 	}
 
-	return nil
+	return output, nil
 
 }
 
-func createScript(cmds []string) (string, error) {
+func (p *PreRun) createScript(cmds []string) (string, error) {
 	var scriptName string
 	if cmds != nil {
 		tmp, err := ioutil.TempFile("/tmp", "atlantis-temp-script")
@@ -85,7 +77,7 @@ func createScript(cmds []string) (string, error) {
 	return scriptName, nil
 }
 
-func execute(script string) (string, error) {
+func (p *PreRun) execute(script string) (string, error) {
 	if _, err := os.Stat(script); err == nil {
 		os.Chmod(script, 0775)
 	}

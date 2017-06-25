@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 
 	"time"
@@ -122,8 +124,10 @@ func NewServer(config ServerConfig) (*Server, error) {
 	githubBaseClient.BaseURL, _ = url.Parse(ghHostname)
 	githubClient := &GithubClient{client: githubBaseClient, ctx: githubClientCtx}
 	githubStatus := &GithubStatus{client: githubClient}
+	terraformVersion := getTfVersion()
 	terraformClient := &TerraformClient{
 		tfExecutableName: "terraform",
+		tfVersion:        terraformVersion,
 	}
 	githubComments := &GithubCommentRenderer{}
 	awsConfig := &AWSConfig{
@@ -438,4 +442,18 @@ func (s *Server) handleCommentEvent(w http.ResponseWriter, event *github.IssueCo
 	// respond with success and then actually execute the command asynchronously
 	fmt.Fprintln(w, "Processing...")
 	go s.commandHandler.ExecuteCommand(ctx)
+}
+
+func getTfVersion() string {
+	// ignore the error if terraform version command wasn't successful
+	versionCmdOutput, _ := exec.Command("terraform", "version").Output()
+	output := string(versionCmdOutput)
+	// Get terraform version form output
+	r, _ := regexp.Compile("Terraform v([^ ].[^ ].[^ ])")
+	match := r.FindStringSubmatch(output)
+	if len(match) > 0 {
+		return match[1]
+	}
+
+	return ""
 }

@@ -1,11 +1,12 @@
 package server
 
 import (
-	"github.com/hootsuite/atlantis/logging"
-	. "github.com/hootsuite/atlantis/testing_util"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/hootsuite/atlantis/logging"
+	. "github.com/hootsuite/atlantis/testing_util"
 )
 
 var level logging.LogLevel = logging.Info
@@ -50,7 +51,6 @@ func TestPreRun_valid(t *testing.T) {
 	var config Config
 	config.PrePlan = prePlan
 	config.PreApply = preApply
-	config.StashPath = "/some/path"
 	err := PreRun(&config, logger, "/some/path", &Command{environment: "staging", commandType: Plan})
 	Assert(t, err == nil, "should not error")
 
@@ -61,7 +61,6 @@ func TestPreRun_partial_valid(t *testing.T) {
 	prePlan := PrePlan{Commands: cmds}
 	var config Config
 	config.PrePlan = prePlan
-	config.StashPath = "/some/path"
 	err := PreRun(&config, logger, "/some/path", &Command{environment: "staging", commandType: Plan})
 	Assert(t, err == nil, "should not error")
 }

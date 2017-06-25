@@ -1,22 +1,15 @@
 package server
 
 import (
-	. "github.com/hootsuite/atlantis/testing_util"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	. "github.com/hootsuite/atlantis/testing_util"
 )
 
-var tempConfigFile = "/tmp/" + AtlantisConfigFile
-
-func TestConfigFileExists_invalid_path(t *testing.T) {
-	var c Config
-	Equals(t, c.Exists("/invalid/path"), false)
-}
-
-func TestConfigFileExists_valid_path(t *testing.T) {
-	var c Config
-	var str = `
+var tempConfigFile = "/tmp/" + ProjectConfigFile
+var projectConfigFileStr = `
 ---
 terraform_version: "0.0.1"
 pre_apply:
@@ -27,9 +20,18 @@ pre_plan:
   commands:
     - "echo"
     - "date"
-stash_path: "file/path"
+terraform_args:
+  - "-no-color"
 `
-	writeAtlantisConfigFile([]byte(str))
+
+func TestConfigFileExists_invalid_path(t *testing.T) {
+	var c Config
+	Equals(t, c.Exists("/invalid/path"), false)
+}
+
+func TestConfigFileExists_valid_path(t *testing.T) {
+	var c Config
+	writeAtlantisConfigFile([]byte(projectConfigFileStr))
 	defer os.Remove(tempConfigFile)
 	Equals(t, c.Exists("/tmp"), true)
 }
@@ -45,20 +47,7 @@ func TestConfigFileRead_invalid_config(t *testing.T) {
 
 func TestConfigFileRead_valid_config(t *testing.T) {
 	var c Config
-	var str = `
----
-terraform_version: "0.0.1"
-pre_apply:
-  commands:
-    - "echo"
-    - "date"
-pre_plan:
-  commands:
-    - "echo"
-    - "date"
-stash_path: "file/path"
-`
-	writeAtlantisConfigFile([]byte(str))
+	writeAtlantisConfigFile([]byte(projectConfigFileStr))
 	defer os.Remove(tempConfigFile)
 	err := c.Read("/tmp")
 	Assert(t, err == nil, "should be valid json")
