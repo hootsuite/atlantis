@@ -162,6 +162,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 			return nil, errors.Wrap(err, "creating file backend for plans")
 		}
 	}
+	concurrentRunLocker := NewConcurrentRunLocker()
 	applyExecutor := &ApplyExecutor{
 		github:                githubClient,
 		githubStatus:          githubStatus,
@@ -173,6 +174,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		lockingClient:         lockingClient,
 		requireApproval:       config.RequireApproval,
 		planBackend:           planBackend,
+		concurrentRunLocker: concurrentRunLocker,
 	}
 	planExecutor := &PlanExecutor{
 		github:                githubClient,
@@ -184,6 +186,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
 		planBackend:           planBackend,
+		concurrentRunLocker: concurrentRunLocker,
 	}
 	helpExecutor := &HelpExecutor{}
 	pullClosedExecutor := &PullClosedExecutor{

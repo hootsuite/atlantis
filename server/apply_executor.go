@@ -25,6 +25,7 @@ type ApplyExecutor struct {
 	lockingClient         *locking.Client
 	requireApproval       bool
 	planBackend           plan.Backend
+	concurrentRunLocker *ConcurrentRunLocker
 }
 
 /** Result Types **/
@@ -59,6 +60,13 @@ func (n NoPlansFailure) Template() *CompiledTemplate {
 }
 
 func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
+	if a.concurrentRunLocker.TryLock(ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num) != true {
+		ctx.Log.Info("run was locked by a concurrent run")
+		github.CreateComment(ctx.Repo, ctx.Pull, "This environment is currently locked due to an in progress run for this pull request. Wait until run is complete and try again")
+		return
+	}
+	defer a.concurrentRunLocker.Unlock(ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
+
 	a.githubStatus.Update(ctx.Repo, ctx.Pull, Pending, ApplyStep)
 	res := a.setupAndApply(ctx)
 	res.Command = Apply
