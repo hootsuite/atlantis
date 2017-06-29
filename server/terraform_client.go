@@ -10,7 +10,9 @@ type TerraformClient struct {
 func (t *TerraformClient) RunTerraformCommand(path string, tfCmd []string, tfEnvVars []string) ([]string, string, error) {
 	terraformCmd := exec.Command(t.tfExecutableName, tfCmd...)
 	terraformCmd.Dir = path
-	terraformCmd.Env = tfEnvVars
+	if len(tfEnvVars) > 0 {
+		terraformCmd.Env = tfEnvVars
+	}
 	out, err := terraformCmd.CombinedOutput()
 	output := string(out)
 	if err != nil {

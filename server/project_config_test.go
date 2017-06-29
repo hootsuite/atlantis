@@ -20,24 +20,25 @@ pre_plan:
   commands:
     - "echo"
     - "date"
-terraform_args:
-  - "-no-color"
+extra_arguments:
+  - command_name: "plan"
+    arguments: ["-var", "hello=world"]
 `
 
 func TestConfigFileExists_invalid_path(t *testing.T) {
-	var c Config
+	var c ProjectConfig
 	Equals(t, c.Exists("/invalid/path"), false)
 }
 
 func TestConfigFileExists_valid_path(t *testing.T) {
-	var c Config
+	var c ProjectConfig
 	writeAtlantisConfigFile([]byte(projectConfigFileStr))
 	defer os.Remove(tempConfigFile)
 	Equals(t, c.Exists("/tmp"), true)
 }
 
 func TestConfigFileRead_invalid_config(t *testing.T) {
-	var c Config
+	var c ProjectConfig
 	str := []byte(`---invalid`)
 	writeAtlantisConfigFile(str)
 	defer os.Remove(tempConfigFile)
@@ -46,11 +47,11 @@ func TestConfigFileRead_invalid_config(t *testing.T) {
 }
 
 func TestConfigFileRead_valid_config(t *testing.T) {
-	var c Config
+	var c ProjectConfig
 	writeAtlantisConfigFile([]byte(projectConfigFileStr))
 	defer os.Remove(tempConfigFile)
 	err := c.Read("/tmp")
-	Assert(t, err == nil, "should be valid json")
+	Assert(t, err == nil, "should be valid yaml")
 }
 
 func writeAtlantisConfigFile(s []byte) error {

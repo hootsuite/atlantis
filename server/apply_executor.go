@@ -10,8 +10,10 @@ import (
 
 	"strconv"
 
+	version "github.com/hashicorp/go-version"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/plan"
+	"github.com/hootsuite/atlantis/prerun"
 )
 
 type ApplyExecutor struct {
@@ -99,10 +101,31 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 }
 
 func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Plan) PathResult {
-	var config Config
+	tfEnv := ctx.Command.environment
+	if tfEnv == "" {
+		tfEnv = "default"
+	}
+
+	lockAttempt, err := a.lockingClient.TryLock(plan.Project, tfEnv, ctx.Pull, ctx.User)
+	if err != nil {
+		return PathResult{
+			Status: Error,
+			Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
+		}
+	}
+	if lockAttempt.LockAcquired != true && lockAttempt.CurrLock.Pull.Num != ctx.Pull.Num {
+		return PathResult{
+			Status: Error,
+			Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.CurrLock.Pull.Num)},
+		}
+	}
+
+	var config ProjectConfig
 	tfVersion := a.terraform.tfVersion
 	// check if config file is found, if not we continue the run
 	projectAbsolutePath := filepath.Dir(plan.LocalPath)
+	var terraformApplyExtraArgs []string
+	preRun := &prerun.PreRun{}
 	if config.Exists(projectAbsolutePath) {
 		ctx.Log.Info("Config file found in %s", projectAbsolutePath)
 		err := config.Read(projectAbsolutePath)
@@ -123,13 +146,49 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			a.terraform.tfExecutableName = "terraform"
 		}
 
-		preRun := &PreRun{
-			Commands:         config.PreApply.Commands,
-			Path:             projectAbsolutePath,
-			Environment:      ctx.Command.environment,
-			TerraformVersion: tfVersion,
-		}
+		// add terraform arguments from project config
+		terraformApplyExtraArgs = config.GetExtraArguments(ctx.Command.commandType.String())
 
+		preRun = prerun.New(config.PreApply.Commands, projectAbsolutePath, ctx.Command.environment, tfVersion)
+	}
+
+	// check if terraform version is > 0.8.8
+	terraformVersion, _ := version.NewVersion(tfVersion)
+	constraints, _ := version.NewConstraint(">= 0.9.0")
+	if constraints.Check(terraformVersion) {
+		// run terraform init
+		tfInitCmd := []string{"init"}
+		initExtraArgs := config.GetExtraArguments("init")
+		_, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, append(tfInitCmd, initExtraArgs...), []string{})
+		if err != nil {
+			errMsg := fmt.Sprintf("terraform init failed: %v", err)
+			ctx.Log.Err(errMsg)
+			return PathResult{Status: Error, Result: GeneralError{errors.New(errMsg)}}
+		}
+		ctx.Log.Info("terraform init ran successfully %s", output)
+
+		tfEnv := ctx.Command.environment
+		if tfEnv == "" {
+			tfEnv = "default"
+		}
+		// run terraform env new and select
+		_, output, err = a.terraform.RunTerraformCommand(projectAbsolutePath, []string{"env", "select", "-no-color", tfEnv}, []string{})
+		if err != nil {
+			// if terraform env select fails we will run terraform env new
+			// to create a new environment
+			_, output, err = a.terraform.RunTerraformCommand(projectAbsolutePath, []string{"env", "new", "-no-color", tfEnv}, []string{})
+			if err != nil {
+				errMsg := fmt.Sprintf("terraform environment setup failed: %v", err)
+				ctx.Log.Err(errMsg)
+				return PathResult{Status: Error, Result: GeneralError{errors.New(errMsg)}}
+			}
+			ctx.Log.Info("terraform environment was created successfully %s", output)
+		}
+		ctx.Log.Info("terraform environment was selected successfully %s", output)
+	}
+
+	// if there are pre plan commands then run them
+	if len(config.PrePlan.Commands) > 0 {
 		preRunOutput, err := preRun.Start()
 		if err != nil {
 			msg := fmt.Sprintf("pre run failed: %v", err)
@@ -139,28 +198,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 				Result: GeneralError{errors.New(msg)},
 			}
 		}
-
 		ctx.Log.Info("Pre run output: \n%s", preRunOutput)
-
-	}
-
-	tfEnv := ctx.Command.environment
-	if tfEnv == "" {
-		tfEnv = "default"
-	}
-
-	lockAttempt, err := a.lockingClient.TryLock(plan.Project, tfEnv, ctx.Pull, ctx.User)
-	if err != nil {
-		return PathResult{
-			Status: Error,
-			Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
-		}
-	}
-	if lockAttempt.LockAcquired != true && lockAttempt.CurrLock.Pull.Num != ctx.Pull.Num {
-		return PathResult{
-			Status: Error,
-			Result: GeneralError{fmt.Errorf("failed to acquire lock: lock held by pull request #%d", lockAttempt.CurrLock.Pull.Num)},
-		}
 	}
 
 	// need to get auth data from assumed role
@@ -186,7 +224,12 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	}
 
 	ctx.Log.Info("running apply from %q", plan.Project.Path)
-	terraformApplyCmdArgs, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, []string{"apply", "-no-color", plan.LocalPath}, []string{
+	tfApplyCmd := []string{"apply", "-no-color", plan.LocalPath}
+	// append terraform arguments from config file
+	if len(terraformApplyExtraArgs) > 0 {
+		tfApplyCmd = append(tfApplyCmd, terraformApplyExtraArgs...)
+	}
+	terraformApplyCmdArgs, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, tfApplyCmd, []string{
 		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credVals.AccessKeyID),
 		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credVals.SecretAccessKey),
 		fmt.Sprintf("AWS_SESSION_TOKEN=%s", credVals.SessionToken),

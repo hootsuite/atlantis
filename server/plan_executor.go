@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	version "github.com/hashicorp/go-version"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/logging"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/plan"
+	"github.com/hootsuite/atlantis/prerun"
 	"github.com/pkg/errors"
 )
 
@@ -150,12 +152,14 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		return p.setupError(ctx, errors.Wrap(err, "cleaning workspace"))
 	}
 
-	var config Config
 	tfVersion := p.terraform.tfVersion
 	planOutputs := []PathResult{}
 	for _, project := range projects {
 		// check if config file is found, if not we continue the run
+		var config ProjectConfig
 		absolutePath := filepath.Join(cloneDir, project.Path)
+		var terraformPlanExtraArgs []string
+		preRun := &prerun.PreRun{}
 		if config.Exists(absolutePath) {
 			ctx.Log.Info("Config file found in %s", absolutePath)
 			err := config.Read(absolutePath)
@@ -173,23 +177,60 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 				p.terraform.tfExecutableName = "terraform"
 			}
 
-			preRun := &PreRun{
-				Commands:         config.PrePlan.Commands,
-				Path:             absolutePath,
-				Environment:      ctx.Command.environment,
-				TerraformVersion: tfVersion,
-			}
+			// add terraform arguments from project config
+			terraformPlanExtraArgs = config.GetExtraArguments(ctx.Command.commandType.String())
 
+			// initialize prerun
+			preRun = prerun.New(config.PrePlan.Commands, absolutePath, ctx.Command.environment, tfVersion)
+		}
+
+		// check if terraform version is > 0.8.8
+		terraformVersion, _ := version.NewVersion(tfVersion)
+		constraints, _ := version.NewConstraint(">= 0.9.0")
+		if constraints.Check(terraformVersion) {
+			// run terraform init
+			tfInitCmd := []string{"init", "-no-color"}
+			initExtraArgs := config.GetExtraArguments("init")
+			_, output, err := p.terraform.RunTerraformCommand(absolutePath, append(tfInitCmd, initExtraArgs...), []string{})
+			if err != nil {
+				errMsg := fmt.Sprintf("terraform init failed. %s %v", output, err)
+				ctx.Log.Err(errMsg)
+				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
+			}
+			ctx.Log.Info("terraform init ran successfully %s", output)
+
+			tfEnv := ctx.Command.environment
+			if tfEnv == "" {
+				tfEnv = "default"
+			}
+			// run terraform env new and select
+			_, output, err = p.terraform.RunTerraformCommand(absolutePath, []string{"env", "select", "-no-color", tfEnv}, []string{})
+			if err != nil {
+				// if terraform env select fails we will run terraform env new
+				// to create a new environment
+				_, output, err = p.terraform.RunTerraformCommand(absolutePath, []string{"env", "new", "-no-color", tfEnv}, []string{})
+				if err != nil {
+					errMsg := fmt.Sprintf("terraform environment setup failed: %v", err)
+					ctx.Log.Err(errMsg)
+					return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
+				}
+				ctx.Log.Info("terraform environment %q was created successfully \n%s", tfEnv, output)
+			}
+			ctx.Log.Info("terraform environment %q was selected successfully \n%s", tfEnv, output)
+		}
+
+		// if there are pre plan commands then run them
+		if len(config.PrePlan.Commands) > 0 {
 			preRunOutput, err := preRun.Start()
 			if err != nil {
 				errMsg := fmt.Sprintf("pre run failed: %v", err)
 				ctx.Log.Err(errMsg)
 				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 			}
-
 			ctx.Log.Info("Pre run output: \n%s", preRunOutput)
 		}
-		generatePlanResponse := p.plan(ctx, cloneDir, p.scratchDir, project, p.sshKey)
+
+		generatePlanResponse := p.plan(ctx, cloneDir, p.scratchDir, project, p.sshKey, terraformPlanExtraArgs)
 		generatePlanResponse.Path = project.Path
 		planOutputs = append(planOutputs, generatePlanResponse)
 	}
@@ -204,7 +245,8 @@ func (p *PlanExecutor) plan(
 	repoDir string,
 	planOutDir string,
 	project models.Project,
-	sshKey string) PathResult {
+	sshKey string,
+	terraformArgs []string) PathResult {
 	ctx.Log.Info("generating plan for path %q", project.Path)
 
 	// todo: setting environment to default should be done elsewhere
@@ -231,17 +273,18 @@ func (p *PlanExecutor) plan(
 	// Run terraform plan
 	ctx.Log.Info("running terraform plan in directory %q", project.Path)
 	tfPlanCmd := []string{"plan", "-refresh", "-no-color"}
+	// append terraform arguments from config file
+	if len(terraformArgs) > 0 {
+		tfPlanCmd = append(tfPlanCmd, terraformArgs...)
+	}
 	planFile := filepath.Join(repoDir, project.Path, fmt.Sprintf("%s.tfplan", tfEnv))
+	// check if env/{environment}.tfvars exist
 	if ctx.Command.environment != "" {
 		tfEnvFileName := filepath.Join("env", ctx.Command.environment+".tfvars")
 		if _, err := os.Stat(filepath.Join(repoDir, project.Path, tfEnvFileName)); err == nil {
 			tfPlanCmd = append(tfPlanCmd, "-var-file", tfEnvFileName, "-out", planFile)
 		} else {
-			ctx.Log.Err("environment file %q not found", tfEnvFileName)
-			return PathResult{
-				Status: Failure,
-				Result: EnvironmentFileNotFoundFailure{tfEnvFileName},
-			}
+			ctx.Log.Info("environment file %q not found. continuing....", tfEnvFileName)
 		}
 	} else {
 		tfPlanCmd = append(tfPlanCmd, "-out", planFile)

@@ -1,4 +1,4 @@
-package server
+package prerun
 
 import (
 	"log"
@@ -14,6 +14,12 @@ var logger = &logging.SimpleLogger{
 	Source: "server",
 	Log:    log.New(os.Stderr, "", log.LstdFlags),
 	Level:  level,
+}
+
+var preRun = &PreRun{
+	Path:             "/tmp/atlantis",
+	Environment:      "staging",
+	TerraformVersion: "",
 }
 
 func TestPreRunCreateScript_empty(t *testing.T) {
@@ -46,21 +52,7 @@ func TestPreRunExecuteScript_valid(t *testing.T) {
 
 func TestPreRun_valid(t *testing.T) {
 	cmds := []string{"echo", "date"}
-	prePlan := PrePlan{Commands: cmds}
-	preApply := PreApply{Commands: cmds}
-	var config Config
-	config.PrePlan = prePlan
-	config.PreApply = preApply
-	err := PreRun(&config, logger, "/some/path", &Command{environment: "staging", commandType: Plan})
-	Assert(t, err == nil, "should not error")
-
-}
-
-func TestPreRun_partial_valid(t *testing.T) {
-	cmds := []string{"echo", "date"}
-	prePlan := PrePlan{Commands: cmds}
-	var config Config
-	config.PrePlan = prePlan
-	err := PreRun(&config, logger, "/some/path", &Command{environment: "staging", commandType: Plan})
-	Assert(t, err == nil, "should not error")
+	preRun.Commands = cmds
+	_, err := preRun.Start()
+	Ok(t, err)
 }

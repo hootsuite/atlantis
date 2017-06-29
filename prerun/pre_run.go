@@ -1,4 +1,4 @@
-package server
+package prerun
 
 import (
 	"bufio"
@@ -17,12 +17,21 @@ type PreRun struct {
 	TerraformVersion string
 }
 
+func New(commands []string, path string, environment string, terraformVersion string) *PreRun {
+	return &PreRun{
+		Commands:         commands,
+		Path:             path,
+		Environment:      environment,
+		TerraformVersion: terraformVersion,
+	}
+}
+
 // Start is the function that starts the pre run
 func (p *PreRun) Start() (string, error) {
 	var execScript string
 
 	// we create a script from the commands provided
-	s, err := p.createScript(p.Commands)
+	s, err := createScript(p.Commands)
 	if err != nil {
 		return "", err
 	}
@@ -42,14 +51,14 @@ func (p *PreRun) Start() (string, error) {
 		}
 		os.Setenv("WORKSPACE", p.Path)
 
-		return p.execute(execScript)
+		return execute(execScript)
 	}
 
 	return output, nil
 
 }
 
-func (p *PreRun) createScript(cmds []string) (string, error) {
+func createScript(cmds []string) (string, error) {
 	var scriptName string
 	if cmds != nil {
 		tmp, err := ioutil.TempFile("/tmp", "atlantis-temp-script")
@@ -77,7 +86,7 @@ func (p *PreRun) createScript(cmds []string) (string, error) {
 	return scriptName, nil
 }
 
-func (p *PreRun) execute(script string) (string, error) {
+func execute(script string) (string, error) {
 	if _, err := os.Stat(script); err == nil {
 		os.Chmod(script, 0775)
 	}

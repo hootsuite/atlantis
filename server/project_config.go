@@ -19,20 +19,25 @@ type PreApply struct {
 	Commands []string `yaml:"commands"`
 }
 
-type Config struct {
-	PrePlan          PrePlan  `yaml:"pre_plan"`
-	PreApply         PreApply `yaml:"pre_apply"`
-	TerraformVersion string   `yaml:"terraform_version"`
-	TerraformArgs    []string `yaml:"terraform_args"`
+type ProjectConfig struct {
+	PrePlan          PrePlan                 `yaml:"pre_plan"`
+	PreApply         PreApply                `yaml:"pre_apply"`
+	TerraformVersion string                  `yaml:"terraform_version"`
+	ExtraArguments   []CommandExtraArguments `yaml:"extra_arguments"`
 }
 
-func (c *Config) Exists(execPath string) bool {
+type CommandExtraArguments struct {
+	Name      string   `yaml:"command_name"`
+	Arguments []string `yaml:"arguments"`
+}
+
+func (c *ProjectConfig) Exists(execPath string) bool {
 	// Check if config file exists
 	_, err := os.Stat(filepath.Join(execPath, ProjectConfigFile))
 	return err == nil
 }
 
-func (c *Config) Read(execPath string) error {
+func (c *ProjectConfig) Read(execPath string) error {
 	raw, err := ioutil.ReadFile(filepath.Join(execPath, ProjectConfigFile))
 	if err != nil {
 		return fmt.Errorf("Couldn't read config file %q: %v", execPath, err)
@@ -43,4 +48,13 @@ func (c *Config) Read(execPath string) error {
 	}
 
 	return nil
+}
+
+func (c *ProjectConfig) GetExtraArguments(command string) []string {
+	for _, value := range c.ExtraArguments {
+		if value.Name == command {
+			return value.Arguments
+		}
+	}
+	return []string{}
 }
