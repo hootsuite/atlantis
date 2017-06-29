@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/plan"
+	"github.com/pkg/errors"
 )
 
 type ApplyExecutor struct {
@@ -75,12 +75,17 @@ func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
+	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num), ctx.Command.environment)
+	if _, err := os.Stat(repoDir); err != nil {
+		ctx.Log.Err(errors.Wrap(err, "checking if workspace exists").Error())
+		a.githubStatus.Update(ctx.Repo, ctx.Pull, Error, ApplyStep)
+		return ExecutionResult{SetupError: GeneralError{errors.New("Workspace missing, please plan again")}}
+	}
+
 	if approved, res := a.isApproved(ctx); !approved {
 		return res
 	}
 
-	// todo: reclone repo and switch branch, don't assume it's already there
-	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num))
 	plans, err := a.planBackend.CopyPlans(repoDir, ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get plans: %s", err)

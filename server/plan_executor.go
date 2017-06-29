@@ -14,6 +14,7 @@ import (
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/plan"
 	"github.com/pkg/errors"
+	"strconv"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
@@ -111,9 +112,10 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		return ExecutionResult{SetupError: GeneralError{errors.New("Plan Failed: we determined that no terraform projects were modified")}}
 	}
 
-	// set up our workspace by cloning the repo
-	cloneDir := fmt.Sprintf("%s/%s/%d", p.scratchDir, ctx.Repo.FullName, ctx.Pull.Num)
+	// set up our workspace by cloning the repo. We separate workspaces by repo, pull, and env
+	cloneDir := filepath.Join(p.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num), ctx.Command.environment)
 	ctx.Log.Info("cleaning clone directory %q", cloneDir)
+	// this is safe to do because we lock runs on repo/pull/env so no one else is using this workspace
 	if err := os.RemoveAll(cloneDir); err != nil {
 		ctx.Log.Warn("failed to clean dir %q before cloning, attempting to continue: %v", cloneDir, err)
 	}
