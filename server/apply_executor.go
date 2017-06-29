@@ -7,8 +7,6 @@ import (
 
 	"path/filepath"
 
-	"strconv"
-
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/plan"
 	"github.com/pkg/errors"
@@ -26,6 +24,7 @@ type ApplyExecutor struct {
 	requireApproval       bool
 	planBackend           plan.Backend
 	concurrentRunLocker *ConcurrentRunLocker
+	workspace *Workspace
 }
 
 /** Result Types **/
@@ -75,9 +74,9 @@ func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
-	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num), ctx.Command.environment)
-	if _, err := os.Stat(repoDir); err != nil {
-		ctx.Log.Err(errors.Wrap(err, "checking if workspace exists").Error())
+	repoDir, err := a.workspace.GetWorkspace(ctx)
+	if err != nil {
+		ctx.Log.Err(err.Error())
 		a.githubStatus.Update(ctx.Repo, ctx.Pull, Error, ApplyStep)
 		return ExecutionResult{SetupError: GeneralError{errors.New("Workspace missing, please plan again")}}
 	}

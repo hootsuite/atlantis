@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/plan"
 	"github.com/pkg/errors"
-	"strconv"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
@@ -32,6 +30,7 @@ type PlanExecutor struct {
 	LockURL     func(id string) (url string)
 	planBackend plan.Backend
 	concurrentRunLocker *ConcurrentRunLocker
+	workspace *Workspace
 }
 
 /** Result Types **/
@@ -112,54 +111,10 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		return ExecutionResult{SetupError: GeneralError{errors.New("Plan Failed: we determined that no terraform projects were modified")}}
 	}
 
-	// set up our workspace by cloning the repo. We separate workspaces by repo, pull, and env
-	cloneDir := filepath.Join(p.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num), ctx.Command.environment)
-	ctx.Log.Info("cleaning clone directory %q", cloneDir)
-	// this is safe to do because we lock runs on repo/pull/env so no one else is using this workspace
-	if err := os.RemoveAll(cloneDir); err != nil {
-		ctx.Log.Warn("failed to clean dir %q before cloning, attempting to continue: %v", cloneDir, err)
+	cloneDir, err := p.workspace.Clone(ctx)
+	if err != nil {
+		return ExecutionResult{SetupError: GeneralError{fmt.Errorf("Plan Failed: setting up workspace: %s", err)}}
 	}
-
-	// create the directory and parents if necessary
-	ctx.Log.Info("creating dir %q", cloneDir)
-	if err := os.MkdirAll(cloneDir, 0755); err != nil {
-		ctx.Log.Warn("failed to create dir %q prior to cloning, attempting to continue: %v", cloneDir, err)
-	}
-
-	// Check if ssh key is set and create git ssh wrapper
-	cloneCmd := exec.Command("git", "clone", ctx.Repo.SSHURL, cloneDir)
-	if p.sshKey != "" {
-		err := GenerateSSHWrapper()
-		if err != nil {
-			return p.setupError(ctx, errors.Wrap(err, "creating git ssh wrapper"))
-		}
-		cloneCmd.Env = []string{
-			fmt.Sprintf("GIT_SSH=%s", defaultSSHWrapper),
-			fmt.Sprintf("PKEY=%s", p.sshKey),
-		}
-	}
-
-	// git clone the repo
-	ctx.Log.Info("git cloning %q into %q", ctx.Repo.SSHURL, cloneDir)
-	if output, err := cloneCmd.CombinedOutput(); err != nil {
-		return p.setupError(ctx, fmt.Errorf("cloning %s: %s: %s", ctx.Repo.SSHURL, err, string(output)))
-	}
-
-	// check out the branch for this PR
-	ctx.Log.Info("checking out branch %q", ctx.Pull.Branch)
-	checkoutCmd := exec.Command("git", "checkout", ctx.Pull.Branch)
-	checkoutCmd.Dir = cloneDir
-	if err := checkoutCmd.Run(); err != nil {
-		return p.setupError(ctx, errors.Wrapf(err, "checking out branch %s", ctx.Pull.Branch))
-	}
-	//workspace.Initialize(ctx.Repo, ctx.Pull.Num)
-
-	// todo: update how we clean the workspace based on the new way of storing plans
-	planFilesPrefix := fmt.Sprintf("%s_%d", strings.Replace(ctx.Repo.FullName, "/", "_", -1), ctx.Pull.Num)
-	if err := p.CleanWorkspace(ctx.Log, planFilesPrefix, p.scratchDir, cloneDir, projects); err != nil {
-		return p.setupError(ctx, errors.Wrap(err, "cleaning workspace"))
-	}
-
 
 	var config Config
 	planOutputs := []PathResult{}
@@ -207,6 +162,13 @@ func (p *PlanExecutor) plan(
 	sshKey string,
 	stashPath string) PathResult {
 	ctx.Log.Info("generating plan for path %q", project.Path)
+
+	if err := p.workspace.CleanProject(project.Path); err != nil {
+		return PathResult{
+			Status: Error,
+			Result: GeneralError{fmt.Errorf("failed to clean workspace: %s", err)},
+		}
+	}
 
 	// NOTE: THIS CODE IS TO SUPPORT TERRAFORM PROJECTS THAT AREN'T USING ATLANTIS CONFIG FILE.
 	if stashPath == "" {
