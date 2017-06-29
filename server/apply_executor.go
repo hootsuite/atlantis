@@ -1,17 +1,15 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"path/filepath"
 
-	"strconv"
-
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/plan"
+	"github.com/pkg/errors"
 )
 
 type ApplyExecutor struct {
@@ -25,6 +23,8 @@ type ApplyExecutor struct {
 	lockingClient         *locking.Client
 	requireApproval       bool
 	planBackend           plan.Backend
+	concurrentRunLocker *ConcurrentRunLocker
+	workspace *Workspace
 }
 
 /** Result Types **/
@@ -59,6 +59,13 @@ func (n NoPlansFailure) Template() *CompiledTemplate {
 }
 
 func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
+	if a.concurrentRunLocker.TryLock(ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num) != true {
+		ctx.Log.Info("run was locked by a concurrent run")
+		github.CreateComment(ctx.Repo, ctx.Pull, "This environment is currently locked due to an in progress run for this pull request. Wait until run is complete and try again")
+		return
+	}
+	defer a.concurrentRunLocker.Unlock(ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
+
 	a.githubStatus.Update(ctx.Repo, ctx.Pull, Pending, ApplyStep)
 	res := a.setupAndApply(ctx)
 	res.Command = Apply
@@ -67,12 +74,17 @@ func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
+	repoDir, err := a.workspace.GetWorkspace(ctx)
+	if err != nil {
+		ctx.Log.Err(err.Error())
+		a.githubStatus.Update(ctx.Repo, ctx.Pull, Error, ApplyStep)
+		return ExecutionResult{SetupError: GeneralError{errors.New("Workspace missing, please plan again")}}
+	}
+
 	if approved, res := a.isApproved(ctx); !approved {
 		return res
 	}
 
-	// todo: reclone repo and switch branch, don't assume it's already there
-	repoDir := filepath.Join(a.scratchDir, ctx.Repo.FullName, strconv.Itoa(ctx.Pull.Num))
 	plans, err := a.planBackend.CopyPlans(repoDir, ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get plans: %s", err)
