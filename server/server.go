@@ -167,6 +167,10 @@ func NewServer(config ServerConfig) (*Server, error) {
 	preRun := &prerun.PreRun{}
 	configReader := &ConfigReader{}
 	concurrentRunLocker := NewConcurrentRunLocker()
+	workspace := &Workspace{
+		scratchDir: config.ScratchDir,
+		sshKey: config.SSHKey,
+	}
 	applyExecutor := &ApplyExecutor{
 		github:                githubClient,
 		githubStatus:          githubStatus,
@@ -181,6 +185,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		preRun:                preRun,
 		configReader: configReader,
 		concurrentRunLocker: concurrentRunLocker,
+		workspace: workspace,
 	}
 	planExecutor := &PlanExecutor{
 		github:                githubClient,
@@ -195,12 +200,14 @@ func NewServer(config ServerConfig) (*Server, error) {
 		preRun:                preRun,
 		configReader: configReader,
 		concurrentRunLocker: concurrentRunLocker,
+		workspace: workspace,
 	}
 	helpExecutor := &HelpExecutor{}
 	pullClosedExecutor := &PullClosedExecutor{
 		planBackend: planBackend,
 		github:      githubClient,
 		locking:     lockingClient,
+		workspace: workspace,
 	}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	eventParser := &EventParser{}
