@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
-	"regexp"
 	"strings"
 
 	"time"
@@ -31,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
+	"github.com/hootsuite/atlantis/prerun"
 )
 
 const (
@@ -110,6 +109,7 @@ func (g GeneralError) Template() *CompiledTemplate {
 
 // todo: /end
 
+
 func NewServer(config ServerConfig) (*Server, error) {
 	tp := github.BasicAuthTransport{
 		Username: strings.TrimSpace(config.GithubUser),
@@ -124,10 +124,9 @@ func NewServer(config ServerConfig) (*Server, error) {
 	githubBaseClient.BaseURL, _ = url.Parse(ghHostname)
 	githubClient := &GithubClient{client: githubBaseClient, ctx: githubClientCtx}
 	githubStatus := &GithubStatus{client: githubClient}
-	terraformVersion := getTfVersion()
-	terraformClient := &TerraformClient{
-		tfExecutableName: "terraform",
-		tfVersion:        terraformVersion,
+	terraformClient, err := NewTerraformClient()
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing terraform")
 	}
 	githubComments := &GithubCommentRenderer{}
 	awsConfig := &AWSConfig{
@@ -137,7 +136,6 @@ func NewServer(config ServerConfig) (*Server, error) {
 
 	var awsSession *session.Session
 	var lockingClient *locking.Client
-	var err error
 	if config.LockingBackend == LockingDynamoDBBackend {
 		awsSession, err = awsConfig.CreateAWSSession()
 		if err != nil {
@@ -166,6 +164,8 @@ func NewServer(config ServerConfig) (*Server, error) {
 			return nil, errors.Wrap(err, "creating file backend for plans")
 		}
 	}
+	preRun := &prerun.PreRun{}
+	configReader := &ConfigReader{}
 	applyExecutor := &ApplyExecutor{
 		github:                githubClient,
 		githubStatus:          githubStatus,
@@ -177,6 +177,8 @@ func NewServer(config ServerConfig) (*Server, error) {
 		lockingClient:         lockingClient,
 		requireApproval:       config.RequireApproval,
 		planBackend:           planBackend,
+		preRun:                preRun,
+		configReader: configReader,
 	}
 	planExecutor := &PlanExecutor{
 		github:                githubClient,
@@ -188,6 +190,8 @@ func NewServer(config ServerConfig) (*Server, error) {
 		githubCommentRenderer: githubComments,
 		lockingClient:         lockingClient,
 		planBackend:           planBackend,
+		preRun:                preRun,
+		configReader: configReader,
 	}
 	helpExecutor := &HelpExecutor{}
 	pullClosedExecutor := &PullClosedExecutor{
@@ -442,21 +446,4 @@ func (s *Server) handleCommentEvent(w http.ResponseWriter, event *github.IssueCo
 	// respond with success and then actually execute the command asynchronously
 	fmt.Fprintln(w, "Processing...")
 	go s.commandHandler.ExecuteCommand(ctx)
-}
-
-// todo: make part of server
-func getTfVersion() string {
-	// todo: this should return go-version.Version, not a string
-
-	// ignore the error if terraform version command wasn't successful
-	versionCmdOutput, _ := exec.Command("terraform", "version").Output()
-	output := string(versionCmdOutput)
-	// Get terraform version form output
-	r, _ := regexp.Compile("Terraform v([^ ].[^ ].[^ ])")
-	match := r.FindStringSubmatch(output)
-	if len(match) > 0 {
-		return match[1]
-	}
-
-	return ""
 }

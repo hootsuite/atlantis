@@ -28,6 +28,7 @@ type ApplyExecutor struct {
 	requireApproval       bool
 	planBackend           plan.Backend
 	preRun                *prerun.PreRun
+	configReader *ConfigReader
 }
 
 /** Result Types **/
@@ -70,8 +71,10 @@ func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
 }
 
 func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
-	if approved, res := a.isApproved(ctx); !approved {
-		return res
+	if a.requireApproval {
+		if approved, res := a.isApproved(ctx); !approved {
+			return res
+		}
 	}
 
 	// todo: reclone repo and switch branch, don't assume it's already there
@@ -117,15 +120,13 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 		}
 	}
 
-	var config ProjectConfig
-	tfVersion := a.terraform.tfVersion
 	// check if config file is found, if not we continue the run
 	projectAbsolutePath := filepath.Dir(plan.LocalPath)
 	var terraformApplyExtraArgs []string
-	preRun := &prerun.PreRun{}
-	if config.Exists(projectAbsolutePath) {
+	var config ProjectConfig
+	if a.configReader.Exists(projectAbsolutePath) {
 		ctx.Log.Info("Config file found in %s", projectAbsolutePath)
-		err := config.Read(projectAbsolutePath)
+		config, err := a.configReader.Read(projectAbsolutePath)
 		if err != nil {
 			msg := fmt.Sprintf("Error reading config file: %v", err)
 			ctx.Log.Err(msg)
@@ -135,22 +136,15 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			}
 		}
 
-		// check if terraform version is specified in config
-		if config.TerraformVersion != "" {
-			tfVersion = config.TerraformVersion
-			a.terraform.tfExecutableName = "terraform" + config.TerraformVersion
-		} else {
-			a.terraform.tfExecutableName = "terraform"
-		}
-
 		// add terraform arguments from project config
 		terraformApplyExtraArgs = config.GetExtraArguments(ctx.Command.commandType.String())
-
-		preRun = prerun.New(config.PreApply.Commands, projectAbsolutePath, ctx.Command.environment, tfVersion)
 	}
 
-	// check if terraform version is > 0.8.8
-	terraformVersion, _ := version.NewVersion(tfVersion)
+	// check if terraform version is >= 0.9.0
+	terraformVersion := a.terraform.Version()
+	if config.TerraformVersion != nil {
+		terraformVersion = config.TerraformVersion
+	}
 	constraints, _ := version.NewConstraint(">= 0.9.0")
 	if constraints.Check(terraformVersion) {
 		// run terraform init
@@ -181,7 +175,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 
 	// if there are pre plan commands then run them
 	if len(config.PrePlan.Commands) > 0 {
-		preRunOutput, err := preRun.Start()
+		preRunOutput, err := a.preRun.Start(config.PreApply.Commands, projectAbsolutePath, ctx.Command.environment, config.TerraformVersion)
 		if err != nil {
 			msg := fmt.Sprintf("pre run failed: %v", err)
 			ctx.Log.Err(msg)
@@ -246,10 +240,6 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 }
 
 func (a *ApplyExecutor) isApproved(ctx *CommandContext) (bool, ExecutionResult) {
-	if !a.requireApproval {
-		return false, ExecutionResult{}
-	}
-
 	ok, err := a.github.PullIsApproved(ctx.Repo, ctx.Pull)
 	if err != nil {
 		msg := fmt.Sprintf("failed to determine if pull request was approved: %v", err)

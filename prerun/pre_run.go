@@ -8,32 +8,18 @@ import (
 	"os/exec"
 	"strings"
 
+	version "github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
 )
 
 const InlineShebang = "/bin/sh -e"
 
-type PreRun struct {
-	Commands         []string
-	Path             string
-	Environment      string
-	TerraformVersion string
-}
+type PreRun struct {}
 
-func New(commands []string, path string, environment string, terraformVersion string) *PreRun {
-	return &PreRun{
-		Commands:         commands,
-		Path:             path,
-		Environment:      environment,
-		TerraformVersion: terraformVersion,
-	}
-}
-
-// todo: pass in all the args from New into Start and make this object stateless
 // Start is the function that starts the pre run
-func (p *PreRun) Start() (string, error) {
+func (p *PreRun) Start(commands []string, path string, environment string, terraformVersion *version.Version) (string, error) {
 	// we create a script from the commands provided
-	s, err := createScript(p.Commands)
+	s, err := createScript(commands)
 
 	if err != nil {
 		return "", err
@@ -43,15 +29,14 @@ func (p *PreRun) Start() (string, error) {
 	// set environment variable for the run.
 	// this is to support scripts to use the ENVIRONMENT, ATLANTIS_TERRAFORM_VERSION
 	// and WORKSPACE variables in their scripts
-	os.Setenv("ENVIRONMENT", p.Environment)
-	os.Setenv("ATLANTIS_TERRAFORM_VERSION", p.TerraformVersion)
-	os.Setenv("WORKSPACE", p.Path)
+	os.Setenv("ENVIRONMENT", environment)
+	os.Setenv("ATLANTIS_TERRAFORM_VERSION", terraformVersion.String())
+	os.Setenv("WORKSPACE", path)
 	return execute(s)
 }
 
 func createScript(cmds []string) (string, error) {
 	// todo: use errors.Wrap
-	// todo: ensure script is 755 here
 	var scriptName string
 	if cmds != nil {
 		tmp, err := ioutil.TempFile("/tmp", "atlantis-temp-script")
@@ -74,6 +59,10 @@ func createScript(cmds []string) (string, error) {
 			return "", fmt.Errorf("Error flushing file when preparing script: %s", err)
 		}
 		tmp.Close()
+
+		if err := os.Chmod(scriptName, 0755); err != nil {
+			return "", errors.Wrap(err, "making pre-run script executable")
+		}
 	}
 
 	return scriptName, nil

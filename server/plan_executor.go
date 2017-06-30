@@ -33,6 +33,7 @@ type PlanExecutor struct {
 	LockURL     func(id string) (url string)
 	planBackend plan.Backend
 	preRun      *prerun.PreRun
+	configReader *ConfigReader
 }
 
 /** Result Types **/
@@ -153,7 +154,6 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		return p.setupError(ctx, errors.Wrap(err, "cleaning workspace"))
 	}
 
-	tfVersion := p.terraform.tfVersion
 	tfEnv := ctx.Command.environment
 	planOutputs := []PathResult{}
 	for _, project := range projects {
@@ -161,33 +161,24 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		var config ProjectConfig
 		absolutePath := filepath.Join(cloneDir, project.Path)
 		var terraformPlanExtraArgs []string
-		preRun := &prerun.PreRun{}
-		if config.Exists(absolutePath) {
+		if p.configReader.Exists(absolutePath) {
 			ctx.Log.Info("Config file found in %s", absolutePath)
-			err := config.Read(absolutePath)
+			config, err = p.configReader.Read(absolutePath)
 			if err != nil {
 				errMsg := fmt.Sprintf("Error reading config file: %v", err)
 				ctx.Log.Err(errMsg)
 				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 			}
 
-			// check if terraform version is specified in config
-			if config.TerraformVersion != "" {
-				tfVersion = config.TerraformVersion
-				p.terraform.tfExecutableName = "terraform" + config.TerraformVersion
-			} else {
-				p.terraform.tfExecutableName = "terraform"
-			}
-
 			// add terraform arguments from project config
 			terraformPlanExtraArgs = config.GetExtraArguments(ctx.Command.commandType.String())
-
-			// initialize prerun
-			preRun = prerun.New(config.PrePlan.Commands, absolutePath, tfEnv, tfVersion)
 		}
 
 		// check if terraform version is >= 0.9.0
-		terraformVersion, _ := version.NewVersion(tfVersion)
+		terraformVersion := p.terraform.Version()
+		if config.TerraformVersion != nil {
+			terraformVersion = config.TerraformVersion
+		}
 		constraints, _ := version.NewConstraint(">= 0.9.0")
 		if constraints.Check(terraformVersion) {
 			// run terraform init
@@ -219,7 +210,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 
 		// if there are pre plan commands then run them
 		if len(config.PrePlan.Commands) > 0 {
-			preRunOutput, err := preRun.Start()
+			preRunOutput, err := p.preRun.Start(config.PrePlan.Commands, absolutePath, tfEnv, terraformVersion)
 			if err != nil {
 				errMsg := fmt.Sprintf("pre run failed: %v", err)
 				ctx.Log.Err(errMsg)
