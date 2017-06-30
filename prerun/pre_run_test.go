@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	version "github.com/hashicorp/go-version"
 	"github.com/hootsuite/atlantis/logging"
 	. "github.com/hootsuite/atlantis/testing_util"
 )
@@ -16,11 +17,7 @@ var logger = &logging.SimpleLogger{
 	Level:  level,
 }
 
-var preRun = &PreRun{
-	Path:             "/tmp/atlantis",
-	Environment:      "staging",
-	TerraformVersion: "",
-}
+var preRun = &PreRun{}
 
 func TestPreRunCreateScript_empty(t *testing.T) {
 	scriptName, err := createScript(nil)
@@ -52,7 +49,7 @@ func TestPreRunExecuteScript_valid(t *testing.T) {
 
 func TestPreRun_valid(t *testing.T) {
 	cmds := []string{"echo", "date"}
-	preRun.Commands = cmds
-	_, err := preRun.Start()
+	version, _ := version.NewVersion("0.8.8")
+	_, err := preRun.Start(cmds, "/tmp/atlantis", "staging", version)
 	Ok(t, err)
 }

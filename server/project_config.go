@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
 	version "github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
 
@@ -21,7 +22,7 @@ type PreApply struct {
 	Commands []string `yaml:"commands"`
 }
 
-type ConfigReader struct {}
+type ConfigReader struct{}
 
 type ProjectConfigYaml struct {
 	PrePlan          PrePlan                 `yaml:"pre_plan"`
@@ -31,8 +32,8 @@ type ProjectConfigYaml struct {
 }
 
 type ProjectConfig struct {
-	PrePlan          PrePlan
-	PreApply         PreApply
+	PrePlan  PrePlan
+	PreApply PreApply
 	// TerraformVersion is the version specified in the config file or nil if version wasn't specified
 	TerraformVersion *version.Version
 	ExtraArguments   []CommandExtraArguments
@@ -69,9 +70,9 @@ func (c *ConfigReader) Read(execPath string) (ProjectConfig, error) {
 	}
 	pc = ProjectConfig{
 		TerraformVersion: v,
-		ExtraArguments: pcYaml.ExtraArguments,
-		PreApply: pcYaml.PreApply,
-		PrePlan: pcYaml.PrePlan,
+		ExtraArguments:   pcYaml.ExtraArguments,
+		PreApply:         pcYaml.PreApply,
+		PrePlan:          pcYaml.PrePlan,
 	}
 
 	return pc, nil
@@ -83,5 +84,5 @@ func (c *ProjectConfig) GetExtraArguments(command string) []string {
 			return value.Arguments
 		}
 	}
-	return []string{}
+	return nil
 }

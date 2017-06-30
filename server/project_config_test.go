@@ -26,31 +26,31 @@ extra_arguments:
 `
 
 func TestConfigFileExists_invalid_path(t *testing.T) {
-	var c ProjectConfigYaml
+	var c ConfigReader
 	Equals(t, c.Exists("/invalid/path"), false)
 }
 
 func TestConfigFileExists_valid_path(t *testing.T) {
-	var c ProjectConfigYaml
+	var c ConfigReader
 	writeAtlantisConfigFile([]byte(projectConfigFileStr))
 	defer os.Remove(tempConfigFile)
 	Equals(t, c.Exists("/tmp"), true)
 }
 
 func TestConfigFileRead_invalid_config(t *testing.T) {
-	var c ProjectConfigYaml
+	var c ConfigReader
 	str := []byte(`---invalid`)
 	writeAtlantisConfigFile(str)
 	defer os.Remove(tempConfigFile)
-	err := c.Read("/tmp")
+	_, err := c.Read("/tmp")
 	Assert(t, err != nil, "expect an error")
 }
 
 func TestConfigFileRead_valid_config(t *testing.T) {
-	var c ProjectConfigYaml
+	var c ConfigReader
 	writeAtlantisConfigFile([]byte(projectConfigFileStr))
 	defer os.Remove(tempConfigFile)
-	err := c.Read("/tmp")
+	_, err := c.Read("/tmp")
 	Assert(t, err == nil, "should be valid yaml")
 }
 

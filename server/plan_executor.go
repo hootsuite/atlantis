@@ -30,9 +30,9 @@ type PlanExecutor struct {
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
 	// LockURL is a function that given a lock id will return a url for detail view
-	LockURL     func(id string) (url string)
-	planBackend plan.Backend
-	preRun      *prerun.PreRun
+	LockURL      func(id string) (url string)
+	planBackend  plan.Backend
+	preRun       *prerun.PreRun
 	configReader *ConfigReader
 }
 
@@ -181,31 +181,14 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		}
 		constraints, _ := version.NewConstraint(">= 0.9.0")
 		if constraints.Check(terraformVersion) {
-			// run terraform init
-			tfInitCmd := []string{"init", "-no-color"}
-			initExtraArgs := config.GetExtraArguments("init")
-			_, output, err := p.terraform.RunTerraformCommand(absolutePath, append(tfInitCmd, initExtraArgs...), []string{})
+			// run terraform init and environment
+			outputs, err := p.terraform.RunTerraformInitAndEnv(absolutePath, tfEnv, &config)
 			if err != nil {
-				errMsg := fmt.Sprintf("terraform init failed. %s %v", output, err)
+				errMsg := fmt.Sprintf("terraform init and environment commands failed. %s %v", outputs, err)
 				ctx.Log.Err(errMsg)
 				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 			}
-			ctx.Log.Info("terraform init ran successfully %s", output)
-
-			// run terraform env new and select
-			_, output, err = p.terraform.RunTerraformCommand(absolutePath, []string{"env", "select", "-no-color", tfEnv}, []string{})
-			if err != nil {
-				// if terraform env select fails we will run terraform env new
-				// to create a new environment
-				_, output, err = p.terraform.RunTerraformCommand(absolutePath, []string{"env", "new", "-no-color", tfEnv}, []string{})
-				if err != nil {
-					errMsg := fmt.Sprintf("terraform environment setup failed: %v", err)
-					ctx.Log.Err(errMsg)
-					return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
-				}
-				ctx.Log.Info("terraform environment %q was created successfully \n%s", tfEnv, output)
-			}
-			ctx.Log.Info("terraform environment %q was selected successfully \n%s", tfEnv, output)
+			ctx.Log.Info("terraform init and environment commands ran successfully %s", outputs)
 		}
 
 		// if there are pre plan commands then run them

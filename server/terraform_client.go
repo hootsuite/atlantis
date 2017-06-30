@@ -1,11 +1,12 @@
 package server
 
 import (
+	"fmt"
 	"os/exec"
 	"regexp"
-	"github.com/pkg/errors"
+
 	version "github.com/hashicorp/go-version"
-	"fmt"
+	"github.com/pkg/errors"
 )
 
 type TerraformClient struct {
@@ -18,8 +19,10 @@ func NewTerraformClient() (*TerraformClient, error) {
 	versionCmdOutput, err := exec.Command("terraform", "version").CombinedOutput()
 	output := string(versionCmdOutput)
 	if err != nil {
-		if err == exec.ErrNotFound {
-			return nil, errors.New("terraform not found in $PATH. Download terraform from https://www.terraform.io/downloads.html")
+		// exec.go line 35, Error() returns
+		// "exec: " + strconv.Quote(e.Name) + ": " + e.Err.Error()
+		if err.Error() == fmt.Sprintf("exec: \"terraform\": %s", exec.ErrNotFound.Error()) {
+			return nil, errors.New("terraform not found in $PATH. \n\nDownload terraform from https://www.terraform.io/downloads.html")
 		}
 		return nil, errors.Wrapf(err, "running terraform version: %s", output)
 	}
@@ -63,4 +66,26 @@ func (t *TerraformClient) RunTerraformCommandWithVersion(path string, tfCmd []st
 	}
 
 	return terraformCmd.Args, output, nil
+}
+
+func (t *TerraformClient) RunTerraformInitAndEnv(path string, env string, config *ProjectConfig) ([]string, error) {
+	var outputs []string
+	// run terraform init
+	_, output, err := t.RunTerraformCommand(path, append([]string{"init", "-no-color"}, config.GetExtraArguments("init")...), []string{})
+	if err != nil {
+		return nil, errors.Wrap(err, "running terraform init")
+	}
+	outputs = append(outputs, output)
+
+	// run terraform env new and select
+	_, output, err = t.RunTerraformCommand(path, []string{"env", "select", "-no-color", env}, []string{})
+	if err != nil {
+		// if terraform env select fails we will run terraform env new
+		// to create a new environment
+		_, output, err = t.RunTerraformCommand(path, []string{"env", "new", "-no-color", env}, []string{})
+		if err != nil {
+			return nil, errors.Wrap(err, "running terraform environment command")
+		}
+	}
+	return append(outputs, output), nil
 }
