@@ -27,6 +27,7 @@ type ApplyExecutor struct {
 	lockingClient         *locking.Client
 	requireApproval       bool
 	planBackend           plan.Backend
+	preRun                *prerun.PreRun
 }
 
 /** Result Types **/
@@ -102,10 +103,6 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 
 func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Plan) PathResult {
 	tfEnv := ctx.Command.environment
-	if tfEnv == "" {
-		tfEnv = "default"
-	}
-
 	lockAttempt, err := a.lockingClient.TryLock(plan.Project, tfEnv, ctx.Pull, ctx.User)
 	if err != nil {
 		return PathResult{
@@ -166,11 +163,6 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			return PathResult{Status: Error, Result: GeneralError{errors.New(errMsg)}}
 		}
 		ctx.Log.Info("terraform init ran successfully %s", output)
-
-		tfEnv := ctx.Command.environment
-		if tfEnv == "" {
-			tfEnv = "default"
-		}
 		// run terraform env new and select
 		_, output, err = a.terraform.RunTerraformCommand(projectAbsolutePath, []string{"env", "select", "-no-color", tfEnv}, []string{})
 		if err != nil {

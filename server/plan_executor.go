@@ -32,6 +32,7 @@ type PlanExecutor struct {
 	// LockURL is a function that given a lock id will return a url for detail view
 	LockURL     func(id string) (url string)
 	planBackend plan.Backend
+	preRun      *prerun.PreRun
 }
 
 /** Result Types **/
@@ -153,6 +154,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 	}
 
 	tfVersion := p.terraform.tfVersion
+	tfEnv := ctx.Command.environment
 	planOutputs := []PathResult{}
 	for _, project := range projects {
 		// check if config file is found, if not we continue the run
@@ -181,10 +183,10 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 			terraformPlanExtraArgs = config.GetExtraArguments(ctx.Command.commandType.String())
 
 			// initialize prerun
-			preRun = prerun.New(config.PrePlan.Commands, absolutePath, ctx.Command.environment, tfVersion)
+			preRun = prerun.New(config.PrePlan.Commands, absolutePath, tfEnv, tfVersion)
 		}
 
-		// check if terraform version is > 0.8.8
+		// check if terraform version is >= 0.9.0
 		terraformVersion, _ := version.NewVersion(tfVersion)
 		constraints, _ := version.NewConstraint(">= 0.9.0")
 		if constraints.Check(terraformVersion) {
@@ -199,10 +201,6 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 			}
 			ctx.Log.Info("terraform init ran successfully %s", output)
 
-			tfEnv := ctx.Command.environment
-			if tfEnv == "" {
-				tfEnv = "default"
-			}
 			// run terraform env new and select
 			_, output, err = p.terraform.RunTerraformCommand(absolutePath, []string{"env", "select", "-no-color", tfEnv}, []string{})
 			if err != nil {
@@ -249,12 +247,8 @@ func (p *PlanExecutor) plan(
 	terraformArgs []string) PathResult {
 	ctx.Log.Info("generating plan for path %q", project.Path)
 
-	// todo: setting environment to default should be done elsewhere
 	tfEnv := ctx.Command.environment
-	if tfEnv == "" {
-		tfEnv = "default"
-	}
-	lockAttempt, err := p.lockingClient.TryLock(project, ctx.Command.environment, ctx.Pull, ctx.User)
+	lockAttempt, err := p.lockingClient.TryLock(project, tfEnv, ctx.Pull, ctx.User)
 	if err != nil {
 		return PathResult{
 			Status: Failure,
@@ -272,22 +266,14 @@ func (p *PlanExecutor) plan(
 
 	// Run terraform plan
 	ctx.Log.Info("running terraform plan in directory %q", project.Path)
-	tfPlanCmd := []string{"plan", "-refresh", "-no-color"}
-	// append terraform arguments from config file
-	if len(terraformArgs) > 0 {
-		tfPlanCmd = append(tfPlanCmd, terraformArgs...)
-	}
 	planFile := filepath.Join(repoDir, project.Path, fmt.Sprintf("%s.tfplan", tfEnv))
+	tfPlanCmd := []string{"plan", "-refresh", "-no-color", "-out", planFile}
+	// append terraform arguments from config file
+	tfPlanCmd = append(tfPlanCmd, terraformArgs...)
 	// check if env/{environment}.tfvars exist
-	if ctx.Command.environment != "" {
-		tfEnvFileName := filepath.Join("env", ctx.Command.environment+".tfvars")
-		if _, err := os.Stat(filepath.Join(repoDir, project.Path, tfEnvFileName)); err == nil {
-			tfPlanCmd = append(tfPlanCmd, "-var-file", tfEnvFileName, "-out", planFile)
-		} else {
-			ctx.Log.Info("environment file %q not found. continuing....", tfEnvFileName)
-		}
-	} else {
-		tfPlanCmd = append(tfPlanCmd, "-out", planFile)
+	tfEnvFileName := filepath.Join("env", tfEnv+".tfvars")
+	if _, err := os.Stat(filepath.Join(repoDir, project.Path, tfEnvFileName)); err == nil {
+		tfPlanCmd = append(tfPlanCmd, "-var-file", tfEnvFileName)
 	}
 
 	// set pull request creator as the session name

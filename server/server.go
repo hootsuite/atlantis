@@ -43,14 +43,14 @@ const (
 
 // Server listens for GitHub events and runs the necessary Atlantis command
 type Server struct {
-	router         *mux.Router
-	port           int
-	commandHandler *CommandHandler
+	router             *mux.Router
+	port               int
+	commandHandler     *CommandHandler
 	pullClosedExecutor *PullClosedExecutor
-	logger         *logging.SimpleLogger
-	eventParser    *EventParser
-	lockingClient  *locking.Client
-	atlantisURL    string
+	logger             *logging.SimpleLogger
+	eventParser        *EventParser
+	lockingClient      *locking.Client
+	atlantisURL        string
 }
 
 // the mapstructure tags correspond to flags in cmd/server.go
@@ -192,8 +192,8 @@ func NewServer(config ServerConfig) (*Server, error) {
 	helpExecutor := &HelpExecutor{}
 	pullClosedExecutor := &PullClosedExecutor{
 		planBackend: planBackend,
-		github: githubClient,
-		locking: lockingClient,
+		github:      githubClient,
+		locking:     lockingClient,
 	}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	eventParser := &EventParser{}
@@ -207,14 +207,14 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 	router := mux.NewRouter()
 	return &Server{
-		router:         router,
-		port:           config.Port,
-		commandHandler: commandHandler,
+		router:             router,
+		port:               config.Port,
+		commandHandler:     commandHandler,
 		pullClosedExecutor: pullClosedExecutor,
-		eventParser:    eventParser,
-		logger:         logger,
-		lockingClient:  lockingClient,
-		atlantisURL:    config.AtlantisURL,
+		eventParser:        eventParser,
+		logger:             logger,
+		lockingClient:      lockingClient,
+		atlantisURL:        config.AtlantisURL,
 	}, nil
 }
 
@@ -444,7 +444,10 @@ func (s *Server) handleCommentEvent(w http.ResponseWriter, event *github.IssueCo
 	go s.commandHandler.ExecuteCommand(ctx)
 }
 
+// todo: make part of server
 func getTfVersion() string {
+	// todo: this should return go-version.Version, not a string
+
 	// ignore the error if terraform version command wasn't successful
 	versionCmdOutput, _ := exec.Command("terraform", "version").Output()
 	output := string(versionCmdOutput)
