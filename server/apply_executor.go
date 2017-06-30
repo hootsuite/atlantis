@@ -199,9 +199,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	ctx.Log.Info("running apply from %q", plan.Project.Path)
 	tfApplyCmd := []string{"apply", "-no-color", plan.LocalPath}
 	// append terraform arguments from config file
-	if len(terraformApplyExtraArgs) > 0 {
-		tfApplyCmd = append(tfApplyCmd, terraformApplyExtraArgs...)
-	}
+	tfApplyCmd = append(tfApplyCmd, terraformApplyExtraArgs...)
 	terraformApplyCmdArgs, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, tfApplyCmd, []string{
 		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credVals.AccessKeyID),
 		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credVals.SecretAccessKey),
