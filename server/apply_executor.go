@@ -30,7 +30,7 @@ type ApplyExecutor struct {
 	planBackend           plan.Backend
 	preRun                *prerun.PreRun
 	configReader          *ConfigReader
-	concurrentRunLocker *ConcurrentRunLocker
+	concurrentRunLocker   *ConcurrentRunLocker
 }
 
 /** Result Types **/
@@ -167,6 +167,19 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			}
 		}
 		ctx.Log.Info("terraform init and environment commands ran successfully %s", outputs)
+	} else {
+		terraformGetCmd := []string{"get", "-no-color"}
+		terraformGetCmd = append(terraformGetCmd, config.GetExtraArguments("get")...)
+		_, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, terraformGetCmd, []string{})
+		if err != nil {
+			msg := fmt.Sprintf("terraform get failed. %s %v", output, err)
+			ctx.Log.Err(msg)
+			return PathResult{
+				Status: Error,
+				Result: GeneralError{errors.New(msg)},
+			}
+		}
+		ctx.Log.Info("terraform get ran successfully %s", output)
 	}
 
 	// if there are pre plan commands then run them

@@ -30,10 +30,10 @@ type PlanExecutor struct {
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
 	// LockURL is a function that given a lock id will return a url for lock view
-	LockURL      func(id string) (url string)
-	planBackend  plan.Backend
-	preRun       *prerun.PreRun
-	configReader *ConfigReader
+	LockURL             func(id string) (url string)
+	planBackend         plan.Backend
+	preRun              *prerun.PreRun
+	configReader        *ConfigReader
 	concurrentRunLocker *ConcurrentRunLocker
 }
 
@@ -197,6 +197,16 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
 			}
 			ctx.Log.Info("terraform init and environment commands ran successfully %s", outputs)
+		} else {
+			terraformGetCmd := []string{"get", "-no-color"}
+			terraformGetCmd = append(terraformGetCmd, config.GetExtraArguments("get")...)
+			_, output, err := p.terraform.RunTerraformCommand(absolutePath, terraformGetCmd, []string{})
+			if err != nil {
+				errMsg := fmt.Sprintf("terraform get failed. %s %v", output, err)
+				ctx.Log.Err(errMsg)
+				return ExecutionResult{SetupError: GeneralError{errors.New(errMsg)}}
+			}
+			ctx.Log.Info("terraform get ran successfully %s", output)
 		}
 
 		// if there are pre plan commands then run them
