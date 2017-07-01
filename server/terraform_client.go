@@ -68,12 +68,12 @@ func (t *TerraformClient) RunTerraformCommandWithVersion(path string, tfCmd []st
 	return terraformCmd.Args, output, nil
 }
 
-func (t *TerraformClient) RunTerraformInitAndEnv(path string, env string, config *ProjectConfig) ([]string, error) {
+func (t *TerraformClient) RunTerraformInitAndEnv(path string, env string, config ProjectConfig) ([]string, error) {
 	var outputs []string
 	// run terraform init
 	_, output, err := t.RunTerraformCommand(path, append([]string{"init", "-no-color"}, config.GetExtraArguments("init")...), []string{})
 	if err != nil {
-		return nil, errors.Wrap(err, "running terraform init")
+		return nil, errors.Wrapf(err, "running terraform init: %s", output)
 	}
 	outputs = append(outputs, output)
 
@@ -84,7 +84,7 @@ func (t *TerraformClient) RunTerraformInitAndEnv(path string, env string, config
 		// to create a new environment
 		_, output, err = t.RunTerraformCommand(path, []string{"env", "new", "-no-color", env}, []string{})
 		if err != nil {
-			return nil, errors.Wrap(err, "running terraform environment command")
+			return nil, errors.Wrapf(err, "running terraform environment command: %s", output)
 		}
 	}
 	return append(outputs, output), nil

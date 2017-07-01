@@ -35,6 +35,7 @@ func (e *EventParser) DetermineCommand(comment *github.IssueCommentEvent) (*Comm
 	if match[4] == "--verbose" {
 		verbose = true
 	}
+	// defaulting to terraform's default environment
 	env := "default"
 	if match[3] != "" {
 		env = match[3]

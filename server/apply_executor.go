@@ -1,10 +1,11 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"path/filepath"
 
@@ -110,7 +111,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	if err != nil {
 		return PathResult{
 			Status: Error,
-			Result: GeneralError{fmt.Errorf("failed to acquire lock: %s", err)},
+			Result: GeneralError{errors.Wrap(err, "trying acquire lock")},
 		}
 	}
 	if lockAttempt.LockAcquired != true && lockAttempt.CurrLock.Pull.Num != ctx.Pull.Num {
