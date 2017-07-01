@@ -19,7 +19,6 @@ type ApplyExecutor struct {
 	github                *GithubClient
 	githubStatus          *GithubStatus
 	awsConfig             *AWSConfig
-	scratchDir            string
 	sshKey                string
 	terraform             *TerraformClient
 	githubCommentRenderer *GithubCommentRenderer

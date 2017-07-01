@@ -12,10 +12,11 @@ import (
 )
 
 const defaultSSHWrapper = "/tmp/git-ssh.sh"
+const workspacePrefix = "repos"
 
 type Workspace struct{
-	scratchDir string
-	sshKey string
+	dataDir string
+	sshKey  string
 }
 
 func (w *Workspace) Clone(ctx *CommandContext) (string, error) {
@@ -71,33 +72,13 @@ func (w *Workspace) GetWorkspace(ctx *CommandContext) (string, error) {
 	return repoDir, nil
 }
 
-// CleanProject deletes all .terraform/ folders and *.tfplan files from dir
-func (w *Workspace) CleanProject(dir string) error {
-	// delete .terraform directories
-	if err := os.RemoveAll(filepath.Join(dir, ".terraform")); err != nil {
-		return errors.Wrap(err, "cleaning old .terraform directories")
-	}
-
-	// delete old plan files
-	ms, err := filepath.Glob(fmt.Sprintf("%s/*.tfplan", filepath.Clean(dir)))
-	if err != nil {
-		return errors.Wrap(err, "finding .tfplan files")
-	}
-	for _, m := range ms {
-		if err := os.Remove(m); err != nil {
-			return errors.Wrap(err, "delete .tfplan file")
-		}
-	}
-	return nil
-}
-
 // Delete deletes the workspace for this repo and pull
 func (w *Workspace) Delete(repo models.Repo, pull models.PullRequest) error {
 	return os.RemoveAll(w.repoPullDir(repo, pull))
 }
 
 func (w *Workspace) repoPullDir(repo models.Repo, pull models.PullRequest) string {
-	return filepath.Join(w.scratchDir, repo.FullName, strconv.Itoa(pull.Num))
+	return filepath.Join(w.dataDir, workspacePrefix, repo.FullName, strconv.Itoa(pull.Num))
 }
 
 func (w *Workspace) cloneDir(ctx *CommandContext) string {

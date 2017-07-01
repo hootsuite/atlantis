@@ -30,6 +30,7 @@ import (
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
 	"github.com/hootsuite/atlantis/prerun"
+	"os/user"
 )
 
 const (
@@ -70,7 +71,6 @@ type ServerConfig struct {
 	PlanBackend          string `mapstructure:"plan-backend"`
 	RequireApproval      bool   `mapstructure:"require-approval"`
 	SSHKey               string `mapstructure:"ssh-key"`
-	ScratchDir           string `mapstructure:"scratch-dir"`
 }
 
 type CommandContext struct {
@@ -111,6 +111,16 @@ func (g GeneralError) Template() *CompiledTemplate {
 
 
 func NewServer(config ServerConfig) (*Server, error) {
+	// if ~ was used in data-dir convert that to actual home directory otherwise we'll
+	// create a directory call "~" instead of actually using home
+	if strings.HasPrefix(config.DataDir, "~/") {
+		user, err := user.Current()
+		if err != nil {
+			return nil, errors.Wrap(err, "determining current user")
+		}
+		config.DataDir = user.HomeDir + strings.TrimPrefix(config.DataDir, "~")
+	}
+
 	tp := github.BasicAuthTransport{
 		Username: strings.TrimSpace(config.GithubUser),
 		Password: strings.TrimSpace(config.GithubPassword),
@@ -168,14 +178,13 @@ func NewServer(config ServerConfig) (*Server, error) {
 	configReader := &ConfigReader{}
 	concurrentRunLocker := NewConcurrentRunLocker()
 	workspace := &Workspace{
-		scratchDir: config.ScratchDir,
-		sshKey: config.SSHKey,
+		dataDir: config.DataDir,
+		sshKey:  config.SSHKey,
 	}
 	applyExecutor := &ApplyExecutor{
 		github:                githubClient,
 		githubStatus:          githubStatus,
 		awsConfig:             awsConfig,
-		scratchDir:            config.ScratchDir,
 		sshKey:                config.SSHKey,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,
@@ -191,7 +200,6 @@ func NewServer(config ServerConfig) (*Server, error) {
 		github:                githubClient,
 		githubStatus:          githubStatus,
 		awsConfig:             awsConfig,
-		scratchDir:            config.ScratchDir,
 		sshKey:                config.SSHKey,
 		terraform:             terraformClient,
 		githubCommentRenderer: githubComments,

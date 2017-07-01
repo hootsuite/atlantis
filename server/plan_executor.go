@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 
 	version "github.com/hashicorp/go-version"
 	"github.com/hootsuite/atlantis/locking"
-	"github.com/hootsuite/atlantis/logging"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/plan"
 	"github.com/hootsuite/atlantis/prerun"
@@ -22,7 +20,6 @@ type PlanExecutor struct {
 	github                *GithubClient
 	githubStatus          *GithubStatus
 	awsConfig             *AWSConfig
-	scratchDir            string
 	s3Bucket              string
 	sshKey                string
 	terraform             *TerraformClient
@@ -168,7 +165,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 			ctx.Log.Info("Pre run output: \n%s", preRunOutput)
 		}
 
-		generatePlanResponse := p.plan(ctx, cloneDir, p.scratchDir, project, p.sshKey, terraformPlanExtraArgs)
+		generatePlanResponse := p.plan(ctx, cloneDir, project, p.sshKey, terraformPlanExtraArgs)
 		generatePlanResponse.Path = project.Path
 		planOutputs = append(planOutputs, generatePlanResponse)
 	}
@@ -181,18 +178,11 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 func (p *PlanExecutor) plan(
 	ctx *CommandContext,
 	repoDir string,
-	planOutDir string,
 	project models.Project,
 	sshKey string,
 	terraformArgs []string) PathResult {
 	ctx.Log.Info("generating plan for path %q", project.Path)
 
-	if err := p.workspace.CleanProject(project.Path); err != nil {
-		return PathResult{
-			Status: Error,
-			Result: GeneralError{fmt.Errorf("failed to clean workspace: %s", err)},
-		}
-	}
 	tfEnv := ctx.Command.environment
 	lockAttempt, err := p.lockingClient.TryLock(project, tfEnv, ctx.Pull, ctx.User)
 	if err != nil {
@@ -334,31 +324,6 @@ func (p *PlanExecutor) getProjectPath(modifiedFilePath string) string {
 		return path.Dir(dir)
 	}
 	return dir
-}
-
-// CleanWorkspace deletes all .terraform/ folders from the project folders and cleans up any plans in the output directory
-func (p *PlanExecutor) CleanWorkspace(log *logging.SimpleLogger, deleteFilesPrefix string, planOutDir string, repoDir string, projects []models.Project) error {
-	log.Info("cleaning workspace directory %q", planOutDir)
-
-	// delete .terraform directories
-	for _, project := range projects {
-		os.RemoveAll(filepath.Join(repoDir, project.Path, ".terraform"))
-	}
-	// delete old plan files
-	files, err := ioutil.ReadDir(planOutDir)
-	if err != nil {
-		return err
-	}
-	for _, file := range files {
-		if strings.HasPrefix(file.Name(), deleteFilesPrefix) {
-			log.Info("deleting file %q", file.Name())
-			fullPath := filepath.Join(planOutDir, file.Name())
-			if err := os.Remove(fullPath); err != nil {
-				log.Warn("failed to remove plan file %q", fullPath)
-			}
-		}
-	}
-	return nil
 }
 
 func (p *PlanExecutor) setupError(ctx *CommandContext, err error) ExecutionResult {
