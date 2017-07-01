@@ -81,7 +81,7 @@ func (e EnvironmentFailure) Template() *CompiledTemplate {
 func (p *PlanExecutor) execute(ctx *CommandContext, github *GithubClient) {
 	if p.concurrentRunLocker.TryLock(ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num) != true {
 		ctx.Log.Info("run was locked by a concurrent run")
-		github.CreateComment(ctx.Repo, ctx.Pull, "This environment is currently locked due to an in progress run for this pull request. Wait until run is complete and try again")
+		github.CreateComment(ctx.Repo, ctx.Pull, "This environment is currently locked by another command that is running for this pull request. Wait until command is complete and try again")
 		return
 	}
 	defer p.concurrentRunLocker.Unlock(ctx.Repo.FullName, ctx.Command.environment, ctx.Pull.Num)
