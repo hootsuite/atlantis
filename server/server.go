@@ -3,15 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/user"
 	"strings"
-
 	"time"
-
-	"io/ioutil"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/elazarl/go-bindata-assetfs"
@@ -26,11 +25,10 @@ import (
 	"github.com/hootsuite/atlantis/plan"
 	"github.com/hootsuite/atlantis/plan/file"
 	"github.com/hootsuite/atlantis/plan/s3"
+	"github.com/hootsuite/atlantis/prerun"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
-	"github.com/hootsuite/atlantis/prerun"
-	"os/user"
 )
 
 const (
@@ -108,7 +106,6 @@ func (g GeneralError) Template() *CompiledTemplate {
 }
 
 // todo: /end
-
 
 func NewServer(config ServerConfig) (*Server, error) {
 	// if ~ was used in data-dir convert that to actual home directory otherwise we'll
@@ -192,9 +189,9 @@ func NewServer(config ServerConfig) (*Server, error) {
 		requireApproval:       config.RequireApproval,
 		planBackend:           planBackend,
 		preRun:                preRun,
-		configReader: configReader,
-		concurrentRunLocker: concurrentRunLocker,
-		workspace: workspace,
+		configReader:          configReader,
+		concurrentRunLocker:   concurrentRunLocker,
+		workspace:             workspace,
 	}
 	planExecutor := &PlanExecutor{
 		github:                githubClient,
@@ -206,16 +203,16 @@ func NewServer(config ServerConfig) (*Server, error) {
 		lockingClient:         lockingClient,
 		planBackend:           planBackend,
 		preRun:                preRun,
-		configReader: configReader,
-		concurrentRunLocker: concurrentRunLocker,
-		workspace: workspace,
+		configReader:          configReader,
+		concurrentRunLocker:   concurrentRunLocker,
+		workspace:             workspace,
 	}
 	helpExecutor := &HelpExecutor{}
 	pullClosedExecutor := &PullClosedExecutor{
 		planBackend: planBackend,
 		github:      githubClient,
 		locking:     lockingClient,
-		workspace: workspace,
+		workspace:   workspace,
 	}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	eventParser := &EventParser{}

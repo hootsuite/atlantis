@@ -1,20 +1,21 @@
 package server
 
 import (
-	"path/filepath"
-	"strconv"
-	"os"
-	"github.com/pkg/errors"
-	"os/exec"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+
 	"github.com/hootsuite/atlantis/models"
+	"github.com/pkg/errors"
 )
 
 const defaultSSHWrapper = "/tmp/git-ssh.sh"
 const workspacePrefix = "repos"
 
-type Workspace struct{
+type Workspace struct {
 	dataDir string
 	sshKey  string
 }
@@ -51,7 +52,7 @@ func (w *Workspace) Clone(ctx *CommandContext) (string, error) {
 	// clone the repo
 	ctx.Log.Info("git cloning %q into %q", ctx.Repo.SSHURL, cloneDir)
 	if output, err := cloneCmd.CombinedOutput(); err != nil {
-		return "", errors.Wrapf(err,"cloning %s: %s", ctx.Repo.SSHURL, string(output))
+		return "", errors.Wrapf(err, "cloning %s: %s", ctx.Repo.SSHURL, string(output))
 	}
 
 	// check out the branch for this PR
@@ -59,7 +60,7 @@ func (w *Workspace) Clone(ctx *CommandContext) (string, error) {
 	checkoutCmd := exec.Command("git", "checkout", ctx.Pull.Branch)
 	checkoutCmd.Dir = cloneDir
 	if err := checkoutCmd.Run(); err != nil {
-		return "", errors.Wrapf(err,"checking out branch %s", ctx.Pull.Branch)
+		return "", errors.Wrapf(err, "checking out branch %s", ctx.Pull.Branch)
 	}
 	return cloneDir, nil
 }

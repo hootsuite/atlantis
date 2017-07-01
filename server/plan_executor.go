@@ -26,12 +26,12 @@ type PlanExecutor struct {
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
 	// LockURL is a function that given a lock id will return a url for lock view
-	LockURL      func(id string) (url string)
-	planBackend  plan.Backend
-	preRun       *prerun.PreRun
-	configReader *ConfigReader
+	LockURL             func(id string) (url string)
+	planBackend         plan.Backend
+	preRun              *prerun.PreRun
+	configReader        *ConfigReader
 	concurrentRunLocker *ConcurrentRunLocker
-	workspace *Workspace
+	workspace           *Workspace
 }
 
 /** Result Types **/

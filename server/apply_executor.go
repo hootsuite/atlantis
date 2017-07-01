@@ -27,8 +27,8 @@ type ApplyExecutor struct {
 	planBackend           plan.Backend
 	preRun                *prerun.PreRun
 	configReader          *ConfigReader
-	concurrentRunLocker *ConcurrentRunLocker
-	workspace *Workspace
+	concurrentRunLocker   *ConcurrentRunLocker
+	workspace             *Workspace
 }
 
 /** Result Types **/

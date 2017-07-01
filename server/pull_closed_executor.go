@@ -1,30 +1,32 @@
 package server
 
 import (
-	"github.com/hootsuite/atlantis/locking"
-	"github.com/hootsuite/atlantis/models"
-	"github.com/pkg/errors"
-	"github.com/hootsuite/atlantis/plan"
+	"bytes"
 	"fmt"
 	"strings"
 	"text/template"
-	"bytes"
+
+	"github.com/hootsuite/atlantis/locking"
+	"github.com/hootsuite/atlantis/models"
+	"github.com/hootsuite/atlantis/plan"
+	"github.com/pkg/errors"
 )
 
 type PullClosedExecutor struct {
-	locking *locking.Client
-	github *GithubClient
+	locking     *locking.Client
+	github      *GithubClient
 	planBackend plan.Backend
-	workspace *Workspace
+	workspace   *Workspace
 }
 
 type templatedProject struct {
 	Path string
 	Envs string
 }
+
 var pullClosedTemplate = template.Must(template.New("").Parse("Locks and plans deleted for the projects and environments modified in this pull request:\n" +
-"{{ range . }}\n" +
-"- path: `{{ .Path }}` {{ .Envs }}{{ end }}"))
+	"{{ range . }}\n" +
+	"- path: `{{ .Path }}` {{ .Envs }}{{ end }}"))
 
 func (p *PullClosedExecutor) CleanUpPull(repo models.Repo, pull models.PullRequest) error {
 	// delete the workspace
