@@ -149,7 +149,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 	constraints, _ := version.NewConstraint(">= 0.9.0")
 	if constraints.Check(terraformVersion) {
 		// run terraform init and environment
-		outputs, err := a.terraform.RunTerraformInitAndEnv(projectAbsolutePath, tfEnv, &config)
+		outputs, err := a.terraform.RunTerraformInitAndEnv(projectAbsolutePath, tfEnv, config)
 		if err != nil {
 			msg := fmt.Sprintf("terraform init and environment commands failed. %s %v", outputs, err)
 			ctx.Log.Err(msg)

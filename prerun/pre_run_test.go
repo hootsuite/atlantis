@@ -19,12 +19,6 @@ var logger = &logging.SimpleLogger{
 
 var preRun = &PreRun{}
 
-func TestPreRunCreateScript_empty(t *testing.T) {
-	scriptName, err := createScript(nil)
-	Assert(t, scriptName == "", "there should not be a script name")
-	Assert(t, err == nil, "there should not be an error")
-}
-
 func TestPreRunCreateScript_valid(t *testing.T) {
 	cmds := []string{"echo", "date"}
 	scriptName, err := createScript(cmds)
