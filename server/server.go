@@ -184,9 +184,9 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 	helpExecutor := &HelpExecutor{}
 	pullClosedExecutor := &PullClosedExecutor{
-		github:      githubClient,
-		locking:     lockingClient,
-		workspace:   workspace,
+		github:    githubClient,
+		locking:   lockingClient,
+		workspace: workspace,
 	}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	eventParser := &EventParser{}

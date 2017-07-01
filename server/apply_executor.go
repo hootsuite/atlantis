@@ -11,8 +11,8 @@ import (
 
 	version "github.com/hashicorp/go-version"
 	"github.com/hootsuite/atlantis/locking"
-	"github.com/hootsuite/atlantis/prerun"
 	"github.com/hootsuite/atlantis/models"
+	"github.com/hootsuite/atlantis/prerun"
 )
 
 type ApplyExecutor struct {
@@ -101,7 +101,7 @@ func (a *ApplyExecutor) setupAndApply(ctx *CommandContext) ExecutionResult {
 		if !info.IsDir() && info.Name() == ctx.Command.environment+".tfplan" {
 			rel, _ := filepath.Rel(repoDir, filepath.Dir(path))
 			plans = append(plans, models.Plan{
-				Project: models.NewProject(ctx.Repo.FullName, rel),
+				Project:   models.NewProject(ctx.Repo.FullName, rel),
 				LocalPath: path,
 			})
 		}

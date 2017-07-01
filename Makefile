@@ -37,4 +37,4 @@ vendor-status:
 	@govendor status
 
 fmt: ## Run goimports (which also formats)
-	goimports -w $$(find . -type f -name '*.go' -not -path "./vendor/*")
+	goimports -w $$(find . -type f -name '*.go' ! -path "./vendor/*" ! -path "./server/bindata_assetfs.go")
