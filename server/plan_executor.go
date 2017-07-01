@@ -198,6 +198,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 			}
 			ctx.Log.Info("terraform init and environment commands ran successfully %s", outputs)
 		} else {
+			// run terraform get for 0.8.8 and below
 			terraformGetCmd := append([]string{"get", "-no-color"}, config.GetExtraArguments("get")...)
 			_, output, err := p.terraform.RunTerraformCommand(absolutePath, terraformGetCmd, []string{})
 			if err != nil {
