@@ -168,8 +168,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 		}
 		ctx.Log.Info("terraform init and environment commands ran successfully %s", outputs)
 	} else {
-		terraformGetCmd := []string{"get", "-no-color"}
-		terraformGetCmd = append(terraformGetCmd, config.GetExtraArguments("get")...)
+		terraformGetCmd := append([]string{"get", "-no-color"}, config.GetExtraArguments("get")...)
 		_, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, terraformGetCmd, []string{})
 		if err != nil {
 			msg := fmt.Sprintf("terraform get failed. %s %v", output, err)
