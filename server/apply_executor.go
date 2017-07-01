@@ -167,19 +167,6 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan plan.Pla
 			}
 		}
 		ctx.Log.Info("terraform init and environment commands ran successfully %s", outputs)
-	} else {
-		// run terraform get for 0.8.8 and below
-		terraformGetCmd := append([]string{"get", "-no-color"}, config.GetExtraArguments("get")...)
-		_, output, err := a.terraform.RunTerraformCommand(projectAbsolutePath, terraformGetCmd, []string{})
-		if err != nil {
-			msg := fmt.Sprintf("terraform get failed. %s %v", output, err)
-			ctx.Log.Err(msg)
-			return PathResult{
-				Status: Error,
-				Result: GeneralError{errors.New(msg)},
-			}
-		}
-		ctx.Log.Info("terraform get ran successfully %s", output)
 	}
 
 	// if there are pre plan commands then run them

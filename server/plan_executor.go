@@ -200,7 +200,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		} else {
 			// run terraform get for 0.8.8 and below
 			terraformGetCmd := append([]string{"get", "-no-color"}, config.GetExtraArguments("get")...)
-			_, output, err := p.terraform.RunTerraformCommand(absolutePath, terraformGetCmd, []string{})
+			_, output, err := p.terraform.RunTerraformCommand(absolutePath, terraformGetCmd, nil)
 			if err != nil {
 				errMsg := fmt.Sprintf("terraform get failed. %s %v", output, err)
 				ctx.Log.Err(errMsg)
