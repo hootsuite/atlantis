@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/google/go-github/github"
 	"github.com/gorilla/mux"
@@ -23,6 +22,7 @@ import (
 	"github.com/hootsuite/atlantis/middleware"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
+	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
@@ -63,11 +63,12 @@ type ServerConfig struct {
 }
 
 type CommandContext struct {
-	Repo    models.Repo
-	Pull    models.PullRequest
-	User    models.User
-	Command *Command
-	Log     *logging.SimpleLogger
+	BaseRepo models.Repo
+	HeadRepo models.Repo
+	Pull     models.PullRequest
+	User     models.User
+	Command  *Command
+	Log      *logging.SimpleLogger
 }
 
 // todo: These structs have nothing to do with the server. Move to a different file/package #refactor
@@ -381,7 +382,7 @@ func (s *Server) handlePullRequestEvent(w http.ResponseWriter, pullEvent *github
 		fmt.Fprintln(w, "Ignoring")
 		return
 	}
-	pull, err := s.eventParser.ExtractPullData(pullEvent.PullRequest)
+	pull, _, err := s.eventParser.ExtractPullData(pullEvent.PullRequest)
 	if err != nil {
 		s.logger.Err("parsing pull data: %s", err)
 		w.WriteHeader(http.StatusBadRequest)
