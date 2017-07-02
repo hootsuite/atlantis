@@ -12,7 +12,7 @@ import (
 )
 
 type E2ETester struct {
-	githubClient *github.GithubClient
+	githubClient *GithubClient
 	repoUrl      string
 	ownerName    string
 	repoName     string
