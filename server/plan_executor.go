@@ -13,11 +13,12 @@ import (
 	"github.com/hootsuite/atlantis/prerun"
 	"github.com/pkg/errors"
 	"github.com/hootsuite/atlantis/aws"
+	"github.com/hootsuite/atlantis/github"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
 type PlanExecutor struct {
-	github                *GithubClient
+	github                *github.Client
 	githubStatus          *GithubStatus
 	awsConfig             *aws.Config
 	s3Bucket              string
@@ -73,7 +74,7 @@ func (e EnvironmentFailure) Template() *CompiledTemplate {
 	return EnvironmentErrorTmpl
 }
 
-func (p *PlanExecutor) execute(ctx *CommandContext, github *GithubClient) {
+func (p *PlanExecutor) execute(ctx *CommandContext, github *github.Client) {
 	if p.concurrentRunLocker.TryLock(ctx.BaseRepo.FullName, ctx.Command.environment, ctx.Pull.Num) != true {
 		ctx.Log.Info("run was locked by a concurrent run")
 		github.CreateComment(ctx.BaseRepo, ctx.Pull, "This environment is currently locked by another command that is running for this pull request. Wait until command is complete and try again")

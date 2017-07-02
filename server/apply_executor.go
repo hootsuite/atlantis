@@ -14,10 +14,11 @@ import (
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
 	"github.com/hootsuite/atlantis/aws"
+	"github.com/hootsuite/atlantis/github"
 )
 
 type ApplyExecutor struct {
-	github                *GithubClient
+	github                *github.Client
 	githubStatus          *GithubStatus
 	awsConfig             *aws.Config
 	terraform             *TerraformClient
@@ -61,7 +62,7 @@ func (n NoPlansFailure) Template() *CompiledTemplate {
 	return NoPlansFailureTmpl
 }
 
-func (a *ApplyExecutor) execute(ctx *CommandContext, github *GithubClient) {
+func (a *ApplyExecutor) execute(ctx *CommandContext, github *github.Client) {
 	if a.concurrentRunLocker.TryLock(ctx.BaseRepo.FullName, ctx.Command.environment, ctx.Pull.Num) != true {
 		ctx.Log.Info("run was locked by a concurrent run")
 		github.CreateComment(ctx.BaseRepo, ctx.Pull, "This environment is currently locked by another command that is running for this pull request. Wait until command is complete and try again")

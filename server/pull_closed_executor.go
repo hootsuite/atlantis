@@ -9,11 +9,12 @@ import (
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/pkg/errors"
+	"github.com/hootsuite/atlantis/github"
 )
 
 type PullClosedExecutor struct {
 	locking   *locking.Client
-	github    *GithubClient
+	github    *github.Client
 	workspace *Workspace
 }
 

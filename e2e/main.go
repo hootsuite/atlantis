@@ -69,7 +69,7 @@ func main() {
 	}
 	ghClient := github.NewClient(tp.Client())
 
-	githubClient := &GithubClient{client: ghClient, ctx: context.Background(), username: githubUsername}
+	githubClient := &github.GithubClient{client: ghClient, ctx: context.Background(), username: githubUsername}
 
 	// we create atlantis hook once for the repo, since the atlantis server can handle multiple requests
 	log.Printf("creating atlantis webhook with %s url", atlantisURL)
@@ -103,7 +103,7 @@ func main() {
 
 }
 
-func createAtlantisWebhook(g *GithubClient, ownerName string, repoName string, hookURL string) (int, error) {
+func createAtlantisWebhook(g *github.GithubClient, ownerName string, repoName string, hookURL string) (int, error) {
 	// create atlantis hook
 	atlantisHook := &github.Hook{
 		Name:   github.String("web"),
@@ -125,7 +125,7 @@ func createAtlantisWebhook(g *GithubClient, ownerName string, repoName string, h
 	return hook.GetID(), nil
 }
 
-func deleteAtlantisHook(g *GithubClient, ownerName string, repoName string, hookID int) error {
+func deleteAtlantisHook(g *github.GithubClient, ownerName string, repoName string, hookID int) error {
 	_, err := g.client.Repositories.DeleteHook(g.ctx, ownerName, repoName, hookID)
 	if err != nil {
 		return err

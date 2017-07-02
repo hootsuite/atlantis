@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,11 +12,12 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/elazarl/go-bindata-assetfs"
-	"github.com/google/go-github/github"
+	gh "github.com/google/go-github/github"
 	"github.com/gorilla/mux"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/locking/boltdb"
 	"github.com/hootsuite/atlantis/locking/dynamodb"
+	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/logging"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
@@ -110,18 +110,10 @@ func NewServer(config ServerConfig) (*Server, error) {
 		config.DataDir = expanded
 	}
 
-	tp := github.BasicAuthTransport{
-		Username: strings.TrimSpace(config.GithubUser),
-		Password: strings.TrimSpace(config.GithubPassword),
+	githubClient, err := github.NewClient(config.GithubHostname, config.GithubUser, config.GithubPassword)
+	if err != nil {
+		return nil, err
 	}
-	githubBaseClient := github.NewClient(tp.Client())
-	githubClientCtx := context.Background()
-	ghHostname := fmt.Sprintf("https://%s/api/v3/", config.GithubHostname)
-	if config.GithubHostname == "api.github.com" {
-		ghHostname = fmt.Sprintf("https://%s/", config.GithubHostname)
-	}
-	githubBaseClient.BaseURL, _ = url.Parse(ghHostname)
-	githubClient := &GithubClient{client: githubBaseClient, ctx: githubClientCtx}
 	githubStatus := &GithubStatus{client: githubClient}
 	terraformClient, err := NewTerraformClient()
 	if err != nil {
@@ -363,11 +355,11 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	event, _ := github.ParseWebHook(github.WebHookType(r), payload)
+	event, _ := gh.ParseWebHook(gh.WebHookType(r), payload)
 	switch event := event.(type) {
-	case *github.IssueCommentEvent:
+	case *gh.IssueCommentEvent:
 		s.handleCommentEvent(w, event, githubReqID)
-	case *github.PullRequestEvent:
+	case *gh.PullRequestEvent:
 		s.handlePullRequestEvent(w, event, githubReqID)
 	default:
 		s.logger.Debug("Ignoring unsupported event %s", githubReqID)
@@ -376,7 +368,7 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePullRequestEvent will delete any locks associated with the pull request
-func (s *Server) handlePullRequestEvent(w http.ResponseWriter, pullEvent *github.PullRequestEvent, githubReqID string) {
+func (s *Server) handlePullRequestEvent(w http.ResponseWriter, pullEvent *gh.PullRequestEvent, githubReqID string) {
 	if pullEvent.GetAction() != "closed" {
 		s.logger.Debug("Ignoring pull request event since action was not closed %s", githubReqID)
 		fmt.Fprintln(w, "Ignoring")
@@ -407,7 +399,7 @@ func (s *Server) handlePullRequestEvent(w http.ResponseWriter, pullEvent *github
 	fmt.Fprint(w, "Pull request cleaned successfully")
 }
 
-func (s *Server) handleCommentEvent(w http.ResponseWriter, event *github.IssueCommentEvent, githubReqID string) {
+func (s *Server) handleCommentEvent(w http.ResponseWriter, event *gh.IssueCommentEvent, githubReqID string) {
 	if event.GetAction() != "created" {
 		s.logger.Debug("Ignoring comment event since action was not created %s", githubReqID)
 		fmt.Fprintln(w, "Ignoring")
