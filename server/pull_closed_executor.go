@@ -6,10 +6,10 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/pkg/errors"
-	"github.com/hootsuite/atlantis/github"
 )
 
 type PullClosedExecutor struct {

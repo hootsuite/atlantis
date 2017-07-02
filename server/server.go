@@ -14,19 +14,19 @@ import (
 	"github.com/elazarl/go-bindata-assetfs"
 	gh "github.com/google/go-github/github"
 	"github.com/gorilla/mux"
+	"github.com/hootsuite/atlantis/aws"
+	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/locking/boltdb"
 	"github.com/hootsuite/atlantis/locking/dynamodb"
-	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/logging"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
+	"github.com/hootsuite/atlantis/terraform"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
-	"github.com/hootsuite/atlantis/aws"
-	"github.com/hootsuite/atlantis/terraform"
 )
 
 const (

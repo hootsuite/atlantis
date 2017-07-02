@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/spf13/viper"
 	"github.com/hootsuite/atlantis/github"
+	"github.com/spf13/viper"
 )
 
 type HelpExecutor struct{}

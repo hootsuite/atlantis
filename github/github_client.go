@@ -3,12 +3,13 @@ package github
 import (
 	"context"
 
+	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/pkg/errors"
-	"strings"
-	"fmt"
-	"net/url"
 )
 
 type Client struct {

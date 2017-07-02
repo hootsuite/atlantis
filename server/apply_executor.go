@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 
 	version "github.com/hashicorp/go-version"
+	"github.com/hootsuite/atlantis/aws"
+	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
-	"github.com/hootsuite/atlantis/aws"
-	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/terraform"
 )
 

@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	version "github.com/hashicorp/go-version"
+	"github.com/hootsuite/atlantis/aws"
+	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
-	"github.com/pkg/errors"
-	"github.com/hootsuite/atlantis/aws"
-	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/terraform"
+	"github.com/pkg/errors"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
