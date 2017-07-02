@@ -29,6 +29,7 @@ import (
 )
 
 const (
+	lockRoute              = "lock-detail"
 	LockingFileBackend     = "file"
 	LockingDynamoDBBackend = "dynamodb"
 )
@@ -213,7 +214,7 @@ func (s *Server) Start() error {
 	s.router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, AssetInfo: AssetInfo}))
 	s.router.HandleFunc("/hooks", s.postHooks).Methods("POST")
 	s.router.HandleFunc("/locks", s.deleteLock).Methods("DELETE").Queries("id", "{id:.*}")
-	lockRoute := s.router.HandleFunc("/lock", s.lock).Methods("GET").Queries("id", "{id}")
+	lockRoute := s.router.HandleFunc("/lock", s.lock).Methods("GET").Queries("id", "{id}").Name(lockRoute)
 	// function that planExecutor can use to construct detail view url
 	// injecting this here because this is the earliest routes are created
 	s.commandHandler.SetLockURL(func(lockID string) string {
@@ -248,9 +249,9 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 	var results []lock
 	for id, v := range locks {
+		url, _ := s.router.Get(lockRoute).URL("id", url.QueryEscape(id))
 		results = append(results, lock{
-			// todo: make LockURL use the router to get /lock endpoint
-			LockURL:      fmt.Sprintf("/lock?id=%s", url.QueryEscape(id)),
+			LockURL:      url.String(),
 			RepoFullName: v.Project.RepoFullName,
 			PullNum:      v.Pull.Num,
 			Time:         v.Time,
