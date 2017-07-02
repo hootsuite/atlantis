@@ -13,12 +13,13 @@ import (
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
+	"github.com/hootsuite/atlantis/aws"
 )
 
 type ApplyExecutor struct {
 	github                *GithubClient
 	githubStatus          *GithubStatus
-	awsConfig             *AWSConfig
+	awsConfig             *aws.Config
 	terraform             *TerraformClient
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
@@ -196,8 +197,8 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 
 	// need to get auth data from assumed role
 	// todo: de-duplicate calls to assumeRole
-	a.awsConfig.AWSSessionName = ctx.User.Username
-	awsSession, err := a.awsConfig.CreateAWSSession()
+	a.awsConfig.SessionName = ctx.User.Username
+	awsSession, err := a.awsConfig.CreateSession()
 	if err != nil {
 		ctx.Log.Err(err.Error())
 		return PathResult{

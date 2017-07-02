@@ -19,13 +19,13 @@ import (
 	"github.com/hootsuite/atlantis/locking/boltdb"
 	"github.com/hootsuite/atlantis/locking/dynamodb"
 	"github.com/hootsuite/atlantis/logging"
-	"github.com/hootsuite/atlantis/middleware"
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
+	"github.com/hootsuite/atlantis/aws"
 )
 
 const (
@@ -128,15 +128,15 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, errors.Wrap(err, "initializing terraform")
 	}
 	githubComments := &GithubCommentRenderer{}
-	awsConfig := &AWSConfig{
-		AWSRegion:  config.AWSRegion,
-		AWSRoleArn: config.AssumeRole,
+	awsConfig := &aws.Config{
+		Region:  config.AWSRegion,
+		RoleArn: config.AssumeRole,
 	}
 
 	var awsSession *session.Session
 	var lockingClient *locking.Client
 	if config.LockingBackend == LockingDynamoDBBackend {
-		awsSession, err = awsConfig.CreateAWSSession()
+		awsSession, err = awsConfig.CreateSession()
 		if err != nil {
 			return nil, errors.Wrap(err, "creating aws session for DynamoDB")
 		}
@@ -228,7 +228,7 @@ func (s *Server) Start() error {
 		PrintStack: false,
 		StackAll:   false,
 		StackSize:  1024 * 8,
-	}, middleware.NewNon200Logger(s.logger))
+	}, NewNon200Logger(s.logger))
 	n.UseHandler(s.router)
 	s.logger.Info("Atlantis started - listening on port %v", s.port)
 	return cli.NewExitError(http.ListenAndServe(fmt.Sprintf(":%d", s.port), n), 1)

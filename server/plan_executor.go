@@ -12,13 +12,14 @@ import (
 	"github.com/hootsuite/atlantis/models"
 	"github.com/hootsuite/atlantis/prerun"
 	"github.com/pkg/errors"
+	"github.com/hootsuite/atlantis/aws"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
 type PlanExecutor struct {
 	github                *GithubClient
 	githubStatus          *GithubStatus
-	awsConfig             *AWSConfig
+	awsConfig             *aws.Config
 	s3Bucket              string
 	terraform             *TerraformClient
 	githubCommentRenderer *GithubCommentRenderer
@@ -219,8 +220,8 @@ func (p *PlanExecutor) plan(
 	}
 
 	// set pull request creator as the session name
-	p.awsConfig.AWSSessionName = ctx.Pull.Author
-	awsSession, err := p.awsConfig.CreateAWSSession()
+	p.awsConfig.SessionName = ctx.Pull.Author
+	awsSession, err := p.awsConfig.CreateSession()
 	if err != nil {
 		ctx.Log.Err(err.Error())
 		return PathResult{
