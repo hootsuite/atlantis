@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/hootsuite/atlantis/aws"
 	"github.com/hootsuite/atlantis/github"
+	"github.com/hootsuite/atlantis/terraform"
 )
 
 // PlanExecutor handles everything related to running the Terraform plan including integration with S3, Terraform, and GitHub
@@ -22,7 +23,7 @@ type PlanExecutor struct {
 	githubStatus          *GithubStatus
 	awsConfig             *aws.Config
 	s3Bucket              string
-	terraform             *TerraformClient
+	terraform             *terraform.Client
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
 	// LockURL is a function that given a lock id will return a url for lock view
@@ -144,7 +145,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		constraints, _ := version.NewConstraint(">= 0.9.0")
 		if constraints.Check(terraformVersion) {
 			// run terraform init and environment
-			outputs, err := p.terraform.RunTerraformInitAndEnv(absolutePath, tfEnv, config)
+			outputs, err := p.terraform.RunInitAndEnv(absolutePath, tfEnv, config.GetExtraArguments("init"))
 			if err != nil {
 				errMsg := fmt.Sprintf("terraform init and environment commands failed. %s %v", outputs, err)
 				ctx.Log.Err(errMsg)
@@ -154,7 +155,7 @@ func (p *PlanExecutor) setupAndPlan(ctx *CommandContext) ExecutionResult {
 		} else {
 			// run terraform get for 0.8.8 and below
 			terraformGetCmd := append([]string{"get", "-no-color"}, config.GetExtraArguments("get")...)
-			_, output, err := p.terraform.RunTerraformCommand(absolutePath, terraformGetCmd, nil)
+			_, output, err := p.terraform.RunCommand(absolutePath, terraformGetCmd, nil)
 			if err != nil {
 				errMsg := fmt.Sprintf("terraform get failed. %s %v", output, err)
 				ctx.Log.Err(errMsg)
@@ -241,7 +242,7 @@ func (p *PlanExecutor) plan(
 		}
 	}
 
-	terraformPlanCmdArgs, output, err := p.terraform.RunTerraformCommand(filepath.Join(repoDir, project.Path), tfPlanCmd, []string{
+	terraformPlanCmdArgs, output, err := p.terraform.RunCommand(filepath.Join(repoDir, project.Path), tfPlanCmd, []string{
 		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credVals.AccessKeyID),
 		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credVals.SecretAccessKey),
 		fmt.Sprintf("AWS_SESSION_TOKEN=%s", credVals.SessionToken),

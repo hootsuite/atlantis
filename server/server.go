@@ -26,6 +26,7 @@ import (
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
 	"github.com/hootsuite/atlantis/aws"
+	"github.com/hootsuite/atlantis/terraform"
 )
 
 const (
@@ -115,7 +116,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, err
 	}
 	githubStatus := &GithubStatus{client: githubClient}
-	terraformClient, err := NewTerraformClient()
+	terraformClient, err := terraform.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing terraform")
 	}
