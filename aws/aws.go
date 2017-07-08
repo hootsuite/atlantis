@@ -25,12 +25,12 @@ func (c *Config) CreateSession() (*session.Session, error) {
 		SharedConfigState: session.SharedConfigEnable,
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "create new aws session")
+		return nil, errors.Wrap(err, "create new aws session")
 	}
 
 	_, err = session.Config.Credentials.Get()
 	if err != nil {
-		return nil, errors.Wrapf(err, "getting AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
+		return nil, errors.Wrap(err, "getting AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
 	}
 
 	// generate a new session if aws role is provided
