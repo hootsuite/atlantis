@@ -41,8 +41,7 @@ func Start() error {
 	colorstring.Println(bootstrapDescription)
 	// wait for user to continue
 	colorstring.Printf("\n[white]Press any key to continue or Ctrl + C to cancel")
-	var confirm string
-	fmt.Scanln(&confirm)
+	fmt.Scanln()
 	// read github username
 	colorstring.Print("\n[white][bold]Github username: ")
 	fmt.Scanln(&githubUsername)
