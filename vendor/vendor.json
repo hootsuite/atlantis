@@ -201,6 +201,12 @@
 			"revisionTime": "2015-03-01T13:48:40Z"
 		},
 		{
+			"checksumSHA1": "QehftbM4oe+BqLuRKh0qojQp4as=",
+			"path": "github.com/briandowns/spinner",
+			"revision": "48dbb65d7bd5c74ab50d53d04c949f20e3d14944",
+			"revisionTime": "2017-06-14T15:48:58Z"
+		},
+		{
 			"checksumSHA1": "7DxViusFRJ7UPH0jZqYatwDrOkY=",
 			"path": "github.com/elazarl/go-bindata-assetfs",
 			"revision": "30f82fa23fd844bd5bb1e5f216db87fd77b5eb43",
@@ -324,6 +330,12 @@
 			"revisionTime": "2017-03-21T09:30:39Z"
 		},
 		{
+			"checksumSHA1": "ttEN1Aupb7xpPMkQLqb3tzLFdXs=",
+			"path": "github.com/mitchellh/colorstring",
+			"revision": "8631ce90f28644f54aeedcb3e389a85174e067d1",
+			"revisionTime": "2015-09-17T21:48:07Z"
+		},
+		{
 			"checksumSHA1": "AXacfEchaUqT5RGmPmMXsOWRhv8=",
 			"path": "github.com/mitchellh/go-homedir",
 			"revision": "756f7b183b7ab78acdbbee5c7f392838ed459dda",
@@ -406,6 +418,12 @@
 			"path": "github.com/urfave/negroni",
 			"revision": "3019daf414cfd2c51de68c3a535707c0de6e3d83",
 			"revisionTime": "2017-06-04T13:12:13Z"
+		},
+		{
+			"checksumSHA1": "ZaU56svwLgiJD0y8JOB3+/mpYBA=",
+			"path": "golang.org/x/crypto/ssh/terminal",
+			"revision": "7e9105388ebff089b3f99f0ef676ea55a6da3a7e",
+			"revisionTime": "2017-05-16T03:11:29Z"
 		},
 		{
 			"checksumSHA1": "Tkb1hBdBWeO7SGjixS2Hm48F6+s=",
