@@ -1,3 +1,4 @@
+// Package bootstrap is used to make getting started with atlantis easier
 package bootstrap
 
 import (
