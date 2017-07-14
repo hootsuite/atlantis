@@ -323,6 +323,12 @@
 			"revisionTime": "2017-05-05T08:58:37Z"
 		},
 		{
+			"checksumSHA1": "40vJyUB4ezQSn/NSadsKEOrudMc=",
+			"path": "github.com/inconshreveable/mousetrap",
+			"revision": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75",
+			"revisionTime": "2014-10-17T20:07:13Z"
+		},
+		{
 			"checksumSHA1": "0ZrwvB6KoGPj2PoDNSEJwxQ6Mog=",
 			"origin": "github.com/aws/aws-sdk-go/vendor/github.com/jmespath/go-jmespath",
 			"path": "github.com/jmespath/go-jmespath",
@@ -334,6 +340,18 @@
 			"path": "github.com/magiconair/properties",
 			"revision": "51463bfca2576e06c62a8504b5c0f06d61312647",
 			"revisionTime": "2017-03-21T09:30:39Z"
+		},
+		{
+			"checksumSHA1": "uAVg4Tj5Fxi62z7/ScDEkHr6Ue8=",
+			"path": "github.com/mattn/go-colorable",
+			"revision": "ded68f7a9561c023e790de24279db7ebf473ea80",
+			"revisionTime": "2017-03-27T08:33:44Z"
+		},
+		{
+			"checksumSHA1": "U6lX43KDDlNOn+Z0Yyww+ZzHfFo=",
+			"path": "github.com/mattn/go-isatty",
+			"revision": "fc9e8d8ef48496124e79ae0df75490096eccf6fe",
+			"revisionTime": "2017-03-22T23:44:13Z"
 		},
 		{
 			"checksumSHA1": "ttEN1Aupb7xpPMkQLqb3tzLFdXs=",
