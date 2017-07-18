@@ -19,13 +19,16 @@ import (
 var terraformExampleRepoOwner = "airauth"
 var terraformExampleRepo = "example"
 
-var bootstrapDescription = `[white]This mode helps you get a atlantis workflow setup really quickly.
-In order to do this we will need you to create a Github personal access token with [green]"repo" [white]scope so we can fork an example terraform project.
+var bootstrapDescription = `[white]Welcome to Atlantis bootstrap!
 
-Follow the instructions below to create a Github personal access token: 
-[green]https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/#creating-a-token
-[white][underline]Note: We don't store the Github access tokens`
+This mode walks you through setting up and using Atlantis. We will
+- fork an example terraform project to your username
+- install terraform (if not already in your PATH)
+- install ngrok so we can expose Atlantis to GitHub
+- start Atlantis
 
+[underline]Press Ctrl-c at any time to exit
+`
 var pullRequestBody = "In this pull request we will learn how to use atlantis. There are various commands that are available for you:\n" +
 	"* Start by typing `atlantis plan` in the comments. That will run a `terraform plan`.\n" +
 	"* Next, lets apply that plan. Type `atlantis apply` in the comments. This will run a `terraform apply`.\n" +
@@ -33,24 +36,25 @@ var pullRequestBody = "In this pull request we will learn how to use atlantis. T
 	"\nThank you for using atlantis. For more info you can go to: https://atlantis.run"
 
 func Start() error {
-	// create a spinner
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	// bootstrap mode headers
-	colorstring.Println("[white]atlantis bootstrap mode")
-	colorstring.Println("Learn more: https://atlantis.run\n")
-	// explain what we are doing
 	colorstring.Println(bootstrapDescription)
-	// wait for user to continue
-	colorstring.Printf("\n[white]Press any key to continue or Ctrl + C to cancel")
-	fmt.Scanln()
-	// read github username
-	colorstring.Print("\n[white][bold]Github username: ")
+	colorstring.Print("\n[white][bold]GitHub username: ")
 	fmt.Scanln(&githubUsername)
 	if githubUsername == "" {
 		return fmt.Errorf("please enter a valid github username")
 	}
+	colorstring.Println(`
+[white]To continue, we need you to create a GitHub personal access token
+with [green]"repo" [white]scope so we can fork an example terraform project.
+
+Follow these instructions to create a token (we don't store any tokens):
+[green]https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/#creating-a-token
+[white]- use "atlantis" for the token description
+- add "repo" scope
+- copy the access token
+`)
 	// read github password, check for error later
-	colorstring.Print("[white][bold]Github password: ")
+	colorstring.Print("[white][bold]GitHub access token (will be hidden): ")
 	githubPassword, _ = readPassword()
 
 	// create github client
@@ -67,12 +71,9 @@ func Start() error {
 	if err := githubClient.CreateFork(terraformExampleRepoOwner, terraformExampleRepo); err != nil {
 		return errors.Wrapf(err, "forking repo %s/%s", terraformExampleRepoOwner, terraformExampleRepo)
 	}
-
-	// check if fork is finished
 	if !githubClient.CheckForkSuccess(terraformExampleRepoOwner, terraformExampleRepo) {
 		return fmt.Errorf("didn't find forked repo %s/%s. fork unsuccessful", terraformExampleRepoOwner, terraformExampleRepoOwner)
 	}
-
 	s.Stop()
 	colorstring.Println("\n[green]=> fork completed!")
 
@@ -89,6 +90,7 @@ func Start() error {
 		}
 		colorstring.Println("\n[green]=> downloaded terraform successfully!")
 		s.Stop()
+
 		// ask user if we can move the terraform binary
 		colorstring.Printf("[white][bold]atlantis needs terraform to run. can we install terraform? press any key to continue or Ctrl + C to exit ")
 		fmt.Scanln()
