@@ -161,9 +161,9 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 
 	tfApplyCmd := append([]string{"apply", "-no-color", plan.LocalPath}, applyExtraArgs...)
 	output, err := a.terraform.RunCommandWithVersion(ctx.Log, absolutePath, tfApplyCmd, []string{
-		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credVals.AccessKeyID),
-		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credVals.SecretAccessKey),
-		fmt.Sprintf("AWS_SESSION_TOKEN=%s", credVals.SessionToken),
+		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", creds.AccessKeyID),
+		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", creds.SecretAccessKey),
+		fmt.Sprintf("AWS_SESSION_TOKEN=%s", creds.SessionToken),
 	}, terraformVersion)
 	if err != nil {
 		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
