@@ -44,11 +44,6 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
-// RunCommand calls RunCommandWithVersion with the version of terraform in $PATH
-func (c *Client) RunCommand(log *logging.SimpleLogger, path string, args []string, envVars []string) (string, error) {
-	return c.RunCommandWithVersion(log, path, args, envVars, c.defaultVersion)
-}
-
 // Version returns the version of the terraform executable in our $PATH.
 func (c *Client) Version() *version.Version {
 	return c.defaultVersion
