@@ -147,13 +147,11 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 		}
 	}
 
-	// need to get auth data from assumed role
-	a.awsConfig.SessionName = ctx.User.Username
-	awsSession, err := a.awsConfig.CreateSession()
+	awsSession, err := a.awsConfig.CreateSession(ctx.User.Username)
 	if err != nil {
 		return ProjectResult{Error: err}
 	}
-	credVals, err := awsSession.Config.Credentials.Get()
+	creds, err := awsSession.Config.Credentials.Get()
 	if err != nil {
 		err = errors.Wrap(err, "getting aws credentials")
 		ctx.Log.Err(err.Error())
