@@ -153,7 +153,7 @@ func (p *PlanExecutor) plan(ctx *CommandContext, repoDir string, project models.
 		ctx.Log.Err(err.Error())
 		return ProjectResult{Error: err}
 	}
-	credVals, err := awsSession.Config.Credentials.Get()
+	creds, err := awsSession.Config.Credentials.Get()
 	if err != nil {
 		err = errors.Wrap(err, "getting aws credentials")
 		ctx.Log.Err(err.Error())
@@ -171,9 +171,9 @@ func (p *PlanExecutor) plan(ctx *CommandContext, repoDir string, project models.
 		tfPlanCmd = append(tfPlanCmd, "-var-file", tfEnvFileName)
 	}
 	output, err := p.terraform.RunCommandWithVersion(ctx.Log, filepath.Join(repoDir, project.Path), tfPlanCmd, []string{
-		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", credVals.AccessKeyID),
-		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", credVals.SecretAccessKey),
-		fmt.Sprintf("AWS_SESSION_TOKEN=%s", credVals.SessionToken),
+		fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", creds.AccessKeyID),
+		fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", creds.SecretAccessKey),
+		fmt.Sprintf("AWS_SESSION_TOKEN=%s", creds.SessionToken),
 	}, terraformVersion)
 	if err != nil {
 		// plan failed so unlock the state
