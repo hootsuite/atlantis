@@ -137,7 +137,7 @@ Follow these instructions to create a token (we don't store any tokens):
 	// start atlantis server
 	colorstring.Printf("[white]=> starting atlantis server ")
 	s.Start()
-	atlantisCmd, err := executeCmd("./atlantis", []string{"server", "--gh-user", githubUsername, "--gh-password", githubPassword, "--data-dir", "/tmp/atlantis/data", "--require-approval", "false"})
+	atlantisCmd, err := executeCmd("./atlantis", []string{"server", "--gh-user", githubUsername, "--gh-password", githubPassword, "--data-dir", "/tmp/atlantis/data"})
 	if err != nil {
 		return errors.Wrapf(err, "creating atlantis server")
 	}
