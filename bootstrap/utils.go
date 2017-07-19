@@ -38,8 +38,7 @@ func downloadFile(url string, path string) error {
 	}
 	defer response.Body.Close()
 
-	_, err = io.Copy(output, response.Body)
-	if err != nil {
+	if _, err := io.Copy(output, response.Body); err != nil {
 		return err
 	}
 
