@@ -33,13 +33,10 @@ func (g *Client) CreateFork(owner string, repoName string) error {
 // CheckForkSuccess waits for github fork to complete
 func (g *Client) CheckForkSuccess(ownerName string, forkRepoName string) bool {
 	for i := 0; i < 5; i++ {
-		repoList, _, _ := g.client.Repositories.List(g.ctx, ownerName, nil)
-		for _, repo := range repoList {
-			if repo.GetName() == forkRepoName {
-				return true
-			}
+		if err := g.CreateFork(ownerName, forkRepoName); err == nil {
+			return true
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 	return false
 }
@@ -49,7 +46,7 @@ func (g *Client) CreateWebhook(ownerName string, repoName string, hookURL string
 	// create atlantis hook
 	atlantisHook := &github.Hook{
 		Name:   github.String("web"),
-		Events: []string{"issue_comment", "pull_request"},
+		Events: []string{"issue_comment", "pull_request", "pull_request_review", "push"},
 		Config: map[string]interface{}{
 			"url":          hookURL,
 			"content_type": "json",
@@ -67,7 +64,7 @@ func (g *Client) CreateWebhook(ownerName string, repoName string, hookURL string
 // CreatePullRequest creates a github pull request with custom title and description
 func (g *Client) CreatePullRequest(ownerName string, repoName string, head string, base string) (string, error) {
 	newPullRequest := &github.NewPullRequest{
-		Title: github.String("Hello! Welcome to Atlantis!"),
+		Title: github.String("Welcome to Atlantis!"),
 		Head:  github.String(head),
 		Body:  github.String(pullRequestBody),
 		Base:  github.String(base),

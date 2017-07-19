@@ -4,8 +4,10 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -14,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"os/exec"
+	"os/signal"
 )
 
 var terraformExampleRepoOwner = "airauth"
@@ -27,13 +30,13 @@ This mode walks you through setting up and using Atlantis. We will
 - install ngrok so we can expose Atlantis to GitHub
 - start Atlantis
 
-[underline]Press Ctrl-c at any time to exit
+[bold]Press Ctrl-c at any time to exit
 `
-var pullRequestBody = "In this pull request we will learn how to use atlantis. There are various commands that are available for you:\n" +
-	"* Start by typing `atlantis plan` in the comments. That will run a `terraform plan`.\n" +
-	"* Next, lets apply that plan. Type `atlantis apply` in the comments. This will run a `terraform apply`.\n" +
-	"* For other atlantis commands type `atlantis help` in the comments.\n" +
-	"\nThank you for using atlantis. For more info you can go to: https://atlantis.run"
+var pullRequestBody = "In this pull request we will learn how to use atlantis. There are various commands that are available to you:\n" +
+	"* Start by typing `atlantis help` in the comments.\n" +
+	"* Next, lets plan by typing `atlantis plan` in the comments. That will run a `terraform plan`.\n" +
+	"* Now lets apply that plan. Type `atlantis apply` in the comments. This will run a `terraform apply`.\n" +
+	"\nThank you for using atlantis. For more info on running atlantis in production please follow: https://atlantis.run/link/to/doc"
 
 func Start() error {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
@@ -91,9 +94,6 @@ Follow these instructions to create a token (we don't store any tokens):
 		colorstring.Println("\n[green]=> downloaded terraform successfully!")
 		s.Stop()
 
-		// ask user if we can move the terraform binary
-		colorstring.Printf("[white][bold]atlantis needs terraform to run. can we install terraform? press any key to continue or Ctrl + C to exit ")
-		fmt.Scanln()
 		terraformCmd, err := executeCmd("mv", []string{"/tmp/terraform", "/usr/local/bin/"})
 		if err != nil {
 			return errors.Wrapf(err, "moving terraform binary into /usr/local/bin")
@@ -121,7 +121,14 @@ Follow these instructions to create a token (we don't store any tokens):
 	if err != nil {
 		return errors.Wrapf(err, "creating ngrok tunnel")
 	}
-	defer ngrokCmd.Process.Release()
+
+	ngrokErrChan := make(chan error, 10)
+	go func() {
+		ngrokErrChan <- ngrokCmd.Wait()
+	}()
+	// if this function returns ngrok tunnel should be stopped
+	defer ngrokCmd.Process.Kill()
+
 	// wait for the tunnel to be up
 	time.Sleep(2 * time.Second)
 	s.Stop()
@@ -130,11 +137,18 @@ Follow these instructions to create a token (we don't store any tokens):
 	// start atlantis server
 	colorstring.Printf("[white]=> starting atlantis server ")
 	s.Start()
-	atlantisCmd, err := executeCmd("./atlantis", []string{"server", "--gh-user", githubUsername, "--gh-password", githubPassword, "--data-dir", "/tmp/atlantis/data"})
+	atlantisCmd, err := executeCmd("./atlantis", []string{"server", "--gh-user", githubUsername, "--gh-password", githubPassword, "--data-dir", "/tmp/atlantis/data", "--require-approval", "false"})
 	if err != nil {
 		return errors.Wrapf(err, "creating atlantis server")
 	}
-	defer atlantisCmd.Process.Release()
+
+	atlantisErrChan := make(chan error, 10)
+	go func() {
+		atlantisErrChan <- atlantisCmd.Wait()
+	}()
+	// if this function returns atlantis server should be stopped
+	defer atlantisCmd.Process.Kill()
+
 	tunnelURL, err := getTunnelAddr()
 	if err != nil {
 		return errors.Wrapf(err, "getting tunnel url")
@@ -144,34 +158,51 @@ Follow these instructions to create a token (we don't store any tokens):
 	fmt.Println("")
 
 	// create atlantis webhook
+	colorstring.Printf("[white]=> creating atlantis webhook ")
+	s.Start()
 	err = githubClient.CreateWebhook(githubUsername, terraformExampleRepo, fmt.Sprintf("%s/events", tunnelURL))
 	if err != nil {
 		return errors.Wrapf(err, "creating atlantis webhook")
 	}
+	s.Stop()
+	colorstring.Println("\n[green]=> atlantis webhook created!")
 
 	// create a new pr in the example repo
 	colorstring.Printf("[white]=> creating a new pull request ")
 	s.Start()
 	pullRequestURL, err := githubClient.CreatePullRequest(githubUsername, "example", "example", "master")
 	if err != nil {
-		return errors.Wrapf(err, "creating pull new pull request for repo %s/%s", githubUsername, terraformExampleRepo)
+		return errors.Wrapf(err, "creating new pull request for repo %s/%s", githubUsername, terraformExampleRepo)
 	}
 	s.Stop()
 	colorstring.Println("\n[green]=> pull request created!")
 
 	// open new pull request in the browser
-	colorstring.Println("[white]=> opening pull request....")
+	colorstring.Printf("[white]=> opening pull request ")
+	s.Start()
+	time.Sleep(2 * time.Second)
 	_, err = executeCmd("open", []string{pullRequestURL})
 	if err != nil {
 		colorstring.Printf("[red]=> opening pull request failed. please go to: %s on the browser", pullRequestURL)
 	}
+	s.Stop()
 
 	// wait for ngrok and atlantis server process to finish
 	colorstring.Printf("\n[_green_][light_green]atlantis is running ")
 	s.Start()
-	colorstring.Println("[green] [press Ctrl + C to exit]")
-	atlantisCmd.Wait()
-	ngrokCmd.Wait()
+	colorstring.Println("[green] [press Ctrl-c to exit]")
+
+	// wait for sigterm or siginit signal
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	for {
+		select {
+		case <-signalChan:
+			colorstring.Println("\n[red]shutdown signal received, exiting....")
+			colorstring.Println("\n[green]Thank you for using atlantis :) \n[white]For more information about how to use atlantis in production go to: https://atlantis.run/link/to/docs")
+			return nil
+		}
+	}
 
 	return nil
 }
