@@ -21,7 +21,6 @@ var ngrokApiURL = "http://localhost:4040"
 
 func readPassword() (string, error) {
 	password, err := terminal.ReadPassword(int(syscall.Stdin))
-
 	return string(password), err
 }
 
