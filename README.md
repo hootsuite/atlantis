@@ -10,12 +10,29 @@ A unified workflow for collaborating on Terraform through GitHub.
 - **Lock environments** until pull requests are merged to prevent concurrent modification and confusion
 
 ➜ Developers can write Terraform safely
-- **No need to distribute AWS credentials** to your whole team! Developers can submit Terraform changes and run `plan` and `apply` directly from the pull request
+- **No need to distribute AWS credentials** to your whole team. Developers can submit Terraform changes and run `plan` and `apply` directly from the pull request
 - Optionally, require a **review and approval** prior to running `apply`
 
 ➜ Also
 - No more **copy-pasted code across environments**. Atlantis supports using an `env/{env}.tfvars` file per environment so you can write your base configuration once
 - Support **multiple versions of Terraform** with a simple project config file
+
+* [atlantis](#atlantis)
+  * [Features](#features)
+  * [Getting Started](#getting-started)
+    * [First Download Atlantis](#first-download-atlantis)
+    * [Start with `atlantis bootstrap` (recommended)](#start-with-atlantis-bootstrap-recommended)
+    * [Start Manually](#start-manually)
+  * [Production-Ready Deployment](#production-ready-deployment)
+  * [Configuration](#configuration)
+    * [AWS Credentials](#aws-credentials)
+      * [Assume Role](#assume-role)
+  * [Environments](#environments)
+  * [Locking](#locking)
+  * [`atlantis.yaml` Config File](#atlantisyaml-config-file)
+  * [Glossary](#glossary)
+      * [Project](#project)
+      * [Environment](#environment)
 
 ## Getting Started
 Atlantis runs as a server that receives GitHub webhooks. Once it's running and hooked up with GitHub, you can interact with it directly through GitHub comments.
@@ -75,38 +92,18 @@ Now that Atlantis is running, it's time to test it out. You'll need to set up a 
 - Finally we're ready to talk to Atlantis!
 	- Create a comment `atlantis help` to see what commands you can run from the pull request
 	- `atlantis plan` will run `terraform plan` behind the scenes. You should see the output commented back on the pull request. You should also see some logs show up where you're running `atlantis server`
-	- You could also type `atlantis apply` but since you may not have AWS credentials set up this probably won't work TODO: VERIFY THIS
+	- `atlantis apply` will run `terraform apply`. Since our pull request creates a `null_resource` (which does nothing) this is safe to do.
 
-You're done! If you're ready to set up Atlantis for a production deployment, see [Production-Ready Deployment](#Production-Ready+Deployment)
+You're done! You can type `Ctrl-C` to stop Atlantis.
+
+If you're ready to set up Atlantis for a production deployment, see [Production-Ready Deployment](#production-ready-deployment)
 
 
 ## Production-Ready Deployment
 
 ## Configuration
 Atlantis configuration can be specified via command line flags or a YAML config file.
-
-```
-$ atlantis server --help
-...
-Usage:
-  atlantis server [flags]
-
-Flags:
-      --atlantis-url string          Url that Atlantis can be reached at. Defaults to http://$(hostname):$port where $port comes from the port flag.
-      --aws-assume-role-arn string   ARN of the role to assume when running Terraform against AWS. If not using assume role, no need to set.
-      --aws-region string            The Amazon region to connect to for API actions. (default "us-east-1")
-      --config string                Path to config file.
-      --data-dir string              Path to directory to store Atlantis data. (default "~/.atlantis")
-      --gh-hostname string           Hostname of your Github Enterprise installation. If using github.com, no need to set. (default "github.com")
-      --gh-password string           [REQUIRED] GitHub password of API user. Can also be specified via the ATLANTIS_GH_PASSWORD environment variable.
-      --gh-user string               [REQUIRED] GitHub username of API user.
-  -h, --help                         help for server
-      --log-level string             Log level. Either debug, info, warn, or error. (default "warn")
-      --port int                     Port to bind to. (default 4141)
-      --require-approval             Require pull requests to be "Approved" before allowing the apply command to be run. (default true)
-```
-
-The `gh-password` flag can also be specified via an `ATLANTIS_GH_PASSWORD` environment variable.
+The `gh-token` flag can also be specified via an `ATLANTIS_GH_TOKEN` environment variable.
 Config file values are overridden by environment variables which in turn are overridden by flags.
 
 To use a yaml config file, run atlantis with `--config /path/to/config.yaml`.
@@ -116,7 +113,7 @@ The keys of your config file should be the same as the flag, ex.
 log-level: debug
 ```
 
-To see a list of all flags and their descriptions run `atlantis server -h`
+To see a list of all flags and their descriptions run `atlantis server --help`
 
 ### AWS Credentials
 Atlantis handles AWS credentials in the same way as Terraform.
@@ -125,10 +122,15 @@ It looks in the regular places for AWS credentials in this order:
 2. The AWS credentials file located at `~/.aws/credentials`
 3. Instance profile credentials if Atlantis is running on an EC2 instance
 
+#### Assume Role
 One additional feature of Atlantis is the ability to use the AWS Security Token Service (STS)
-to assume a role (specified by the `--aws-assume-role-arn` flag) and **dynamically
-name the session** with the GitHub username of whoever is running `atlantis apply`.
-To take advantage of this feature, simply set the `--aws-assume-role-arn` flag.
+to assume a role and **dynamically name the session** with the GitHub username of whoever commented `atlantis apply`.
+This is used at Hootsuite so AWS API actions can be correlated with a specific user.
+To take advantage of this feature, simply set the `--aws-assume-role-arn` flag to the
+role to be assumed: `arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME`.
+
+If you're using Terraform's [built-in support](https://www.terraform.io/docs/providers/aws/#assume-role) for assume role then
+there is no need to set this flag unless you also want your sessions to take the name of the GitHub user.
 
 ## Environments
 
