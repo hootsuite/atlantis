@@ -19,8 +19,8 @@ import (
 	"os/signal"
 )
 
-var terraformExampleRepoOwner = "airauth"
-var terraformExampleRepo = "example"
+var terraformExampleRepoOwner = "hootsuite"
+var terraformExampleRepo = "atlantis-example"
 
 var bootstrapDescription = `[white]Welcome to Atlantis bootstrap!
 
