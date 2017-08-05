@@ -20,18 +20,24 @@ type PreApply struct {
 	Commands []string `yaml:"commands"`
 }
 
+type PostApply struct {
+	Commands []string `yaml:"commands"`
+}
+
 type ConfigReader struct{}
 
 type ProjectConfigYaml struct {
 	PrePlan          PrePlan                 `yaml:"pre_plan"`
 	PreApply         PreApply                `yaml:"pre_apply"`
+	PostApply        PostApply               `yaml:"post_apply"`
 	TerraformVersion string                  `yaml:"terraform_version"`
 	ExtraArguments   []CommandExtraArguments `yaml:"extra_arguments"`
 }
 
 type ProjectConfig struct {
-	PrePlan  PrePlan
-	PreApply PreApply
+	PrePlan   PrePlan
+	PreApply  PreApply
+	PostApply PostApply
 	// TerraformVersion is the version specified in the config file or nil if version wasn't specified
 	TerraformVersion *version.Version
 	ExtraArguments   []CommandExtraArguments
@@ -70,6 +76,7 @@ func (c *ConfigReader) Read(execPath string) (ProjectConfig, error) {
 	return ProjectConfig{
 		TerraformVersion: v,
 		ExtraArguments:   pcYaml.ExtraArguments,
+		PostApply:        pcYaml.PostApply,
 		PreApply:         pcYaml.PreApply,
 		PrePlan:          pcYaml.PrePlan,
 	}, nil

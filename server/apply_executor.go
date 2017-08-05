@@ -13,6 +13,7 @@ import (
 	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
+	"github.com/hootsuite/atlantis/postrun"
 	"github.com/hootsuite/atlantis/prerun"
 	"github.com/hootsuite/atlantis/terraform"
 )
@@ -26,6 +27,7 @@ type ApplyExecutor struct {
 	lockingClient         *locking.Client
 	requireApproval       bool
 	preRun                *prerun.PreRun
+	postRun               *postrun.PostRun
 	configReader          *ConfigReader
 	concurrentRunLocker   *ConcurrentRunLocker
 	workspace             *Workspace
@@ -117,7 +119,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	var applyExtraArgs []string
 	var config ProjectConfig
 	if a.configReader.Exists(absolutePath) {
-		config, err := a.configReader.Read(absolutePath)
+		config, err = a.configReader.Read(absolutePath)
 		if err != nil {
 			return ProjectResult{Error: err}
 		}
@@ -132,6 +134,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	if a.awsConfig != nil {
 		awsSession, err := a.awsConfig.CreateSession(ctx.User.Username)
 		if err != nil {
+			ctx.Log.Err(err.Error())
 			return ProjectResult{Error: err}
 		}
 		creds, err := awsSession.Config.Credentials.Get()
@@ -156,7 +159,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	}
 	constraints, _ := version.NewConstraint(">= 0.9.0")
 	if constraints.Check(terraformVersion) {
-		ctx.Log.Info("determined that we are running terraform with version >= 0.9.0")
+		ctx.Log.Info("determined that we are running terraform with version >= 0.9.0. Running version %s", terraformVersion)
 		_, err := a.terraform.RunInitAndEnv(ctx.Log, absolutePath, tfEnv, config.GetExtraArguments("init"), credsEnvVars, terraformVersion)
 		if err != nil {
 			return ProjectResult{Error: err}
@@ -165,9 +168,9 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 
 	// if there are pre apply commands then run them
 	if len(config.PreApply.Commands) > 0 {
-		_, err := a.preRun.Execute(ctx.Log, config.PreApply.Commands, absolutePath, ctx.Command.Environment, config.TerraformVersion)
+		_, err := a.preRun.Execute(ctx.Log, config.PreApply.Commands, absolutePath, tfEnv, terraformVersion)
 		if err != nil {
-			return ProjectResult{Error: err}
+			return ProjectResult{Error: errors.Wrap(err, "running pre apply commands")}
 		}
 	}
 
@@ -177,6 +180,14 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
 	}
 	ctx.Log.Info("apply succeeded")
+
+	// if there are post apply commands then run them
+	if len(config.PostApply.Commands) > 0 {
+		_, err := a.postRun.Execute(ctx.Log, config.PostApply.Commands, absolutePath, tfEnv, terraformVersion)
+		if err != nil {
+			return ProjectResult{Error: errors.Wrap(err, "running post apply commands")}
+		}
+	}
 
 	return ProjectResult{ApplySuccess: output}
 }

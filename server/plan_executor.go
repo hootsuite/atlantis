@@ -151,13 +151,13 @@ func (p *PlanExecutor) plan(ctx *CommandContext, repoDir string, project models.
 	}
 	constraints, _ := version.NewConstraint(">= 0.9.0")
 	if constraints.Check(terraformVersion) {
-		ctx.Log.Info("determined that we are running terraform with version >= 0.9.0")
+		ctx.Log.Info("determined that we are running terraform with version >= 0.9.0. Running version %s", terraformVersion)
 		_, err := p.terraform.RunInitAndEnv(ctx.Log, absolutePath, tfEnv, config.GetExtraArguments("init"), credsEnvVars, terraformVersion)
 		if err != nil {
 			return ProjectResult{Error: err}
 		}
 	} else {
-		ctx.Log.Info("determined that we are running terraform with version < 0.9.0")
+		ctx.Log.Info("determined that we are running terraform with version < 0.9.0. Running version %s", terraformVersion)
 		terraformGetCmd := append([]string{"get", "-no-color"}, config.GetExtraArguments("get")...)
 		_, err := p.terraform.RunCommandWithVersion(ctx.Log, absolutePath, terraformGetCmd, nil, terraformVersion)
 		if err != nil {
