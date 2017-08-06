@@ -144,7 +144,7 @@ Now when Atlantis executes it will use the `terraform{version}` executable.
 ## Project-Specific Customization
 An `atlantis.yaml` config file in your project root (which is not necessarily the repo root) can be used to customize
 - what commands Atlantis runs **before** `plan` and `apply` with `pre_plan` and `pre_apply`
-- what commands Atlantis runs **after** `apply` with `post_apply`
+- what commands Atlantis runs **after** `plan` and `apply` with `post_plan` and `post_apply`
 - additional arguments to be supplied to specific terraform commands with `extra_arguments`
 - what version of Terraform to use (see [Terraform Versions](#terraform-versions))
 
@@ -155,6 +155,9 @@ The schema of the `atlantis.yaml` project config file is
 ---
 terraform_version: 0.8.8 # optional version
 pre_plan:
+  commands:
+  - "curl http://example.com"
+post_plan:
   commands:
   - "curl http://example.com"
 pre_apply:
@@ -169,7 +172,7 @@ extra_arguments:
     - "-tfvars=myvars.tfvars"
 ```
 
-When running the `pre_plan`, `pre_apply`, and `post_apply` commands the following environment variables are available
+When running the `pre_plan`, `post_plan`, `pre_apply`, and `post_apply` commands the following environment variables are available
 - `ENVIRONMENT`: if an environment argument is supplied to `atlantis plan` or `atlantis apply` this will
 be the value of that argument. Else it will be `default`
 - `ATLANTIS_TERRAFORM_VERSION`: local version of `terraform` or the version from `terraform_version` if specified, ex. `0.10.0`

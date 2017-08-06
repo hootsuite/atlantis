@@ -12,7 +12,7 @@ import (
 	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
-	"github.com/hootsuite/atlantis/prerun"
+	"github.com/hootsuite/atlantis/run"
 	"github.com/hootsuite/atlantis/terraform"
 	"github.com/pkg/errors"
 )
@@ -29,7 +29,7 @@ type PlanExecutor struct {
 	lockingClient         *locking.Client
 	// LockURL is a function that given a lock id will return a url for lock view
 	LockURL             func(id string) (url string)
-	preRun              *prerun.PreRun
+	run                 *run.Run
 	configReader        *ConfigReader
 	concurrentRunLocker *ConcurrentRunLocker
 	workspace           *Workspace
@@ -167,7 +167,7 @@ func (p *PlanExecutor) plan(ctx *CommandContext, repoDir string, project models.
 
 	// if there are pre plan commands then run them
 	if len(config.PrePlan.Commands) > 0 {
-		_, err := p.preRun.Execute(ctx.Log, config.PrePlan.Commands, absolutePath, tfEnv, terraformVersion)
+		_, err := p.run.Execute(ctx.Log, config.PrePlan.Commands, absolutePath, tfEnv, terraformVersion, "pre_plan")
 		if err != nil {
 			return ProjectResult{Error: errors.Wrap(err, "running pre plan commands")}
 		}
@@ -191,6 +191,14 @@ func (p *PlanExecutor) plan(ctx *CommandContext, repoDir string, project models.
 		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
 	}
 	ctx.Log.Info("plan succeeded")
+
+	// if there are post plan commands then run them
+	if len(config.PostPlan.Commands) > 0 {
+		_, err := p.run.Execute(ctx.Log, config.PostPlan.Commands, absolutePath, tfEnv, terraformVersion, "post_plan")
+		if err != nil {
+			return ProjectResult{Error: errors.Wrap(err, "running post plan commands")}
+		}
+	}
 
 	return ProjectResult{
 		PlanSuccess: &PlanSuccess{

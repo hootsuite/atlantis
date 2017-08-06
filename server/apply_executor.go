@@ -13,8 +13,7 @@ import (
 	"github.com/hootsuite/atlantis/github"
 	"github.com/hootsuite/atlantis/locking"
 	"github.com/hootsuite/atlantis/models"
-	"github.com/hootsuite/atlantis/postrun"
-	"github.com/hootsuite/atlantis/prerun"
+	"github.com/hootsuite/atlantis/run"
 	"github.com/hootsuite/atlantis/terraform"
 )
 
@@ -26,8 +25,7 @@ type ApplyExecutor struct {
 	githubCommentRenderer *GithubCommentRenderer
 	lockingClient         *locking.Client
 	requireApproval       bool
-	preRun                *prerun.PreRun
-	postRun               *postrun.PostRun
+	run                   *run.Run
 	configReader          *ConfigReader
 	concurrentRunLocker   *ConcurrentRunLocker
 	workspace             *Workspace
@@ -168,7 +166,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 
 	// if there are pre apply commands then run them
 	if len(config.PreApply.Commands) > 0 {
-		_, err := a.preRun.Execute(ctx.Log, config.PreApply.Commands, absolutePath, tfEnv, terraformVersion)
+		_, err := a.run.Execute(ctx.Log, config.PreApply.Commands, absolutePath, tfEnv, terraformVersion, "pre_apply")
 		if err != nil {
 			return ProjectResult{Error: errors.Wrap(err, "running pre apply commands")}
 		}
@@ -183,7 +181,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 
 	// if there are post apply commands then run them
 	if len(config.PostApply.Commands) > 0 {
-		_, err := a.postRun.Execute(ctx.Log, config.PostApply.Commands, absolutePath, tfEnv, terraformVersion)
+		_, err := a.run.Execute(ctx.Log, config.PostApply.Commands, absolutePath, tfEnv, terraformVersion, "post_apply")
 		if err != nil {
 			return ProjectResult{Error: errors.Wrap(err, "running post apply commands")}
 		}
