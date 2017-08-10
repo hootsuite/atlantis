@@ -13,6 +13,7 @@ deps: ## Get go dependencies
 	go get -v .
 
 build: ## Build the main Go service
+    rm -f atlantis-tests
 	go build -v -o atlantis-tests .
 
 deps-test: ## Run tests for go dependencies
@@ -22,4 +23,4 @@ test: ## Run tests, coverage reports, and clean (coverage taints the compiled co
 	go test -v .
 
 run: ## Run e2e tests
-	./e2e
+	./atlantis-tests
