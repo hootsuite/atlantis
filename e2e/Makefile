@@ -22,4 +22,4 @@ test: ## Run tests, coverage reports, and clean (coverage taints the compiled co
 	go test -v .
 
 run: ## Run e2e tests
-	./atlantis-tests
+	./e2e
