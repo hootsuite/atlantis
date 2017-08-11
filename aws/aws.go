@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 const sessionDuration = 30 * time.Minute
@@ -20,6 +21,9 @@ type Config struct {
 	// If empty, we won't assume a role and will use the normal
 	// AWS authentication methods
 	RoleARN string
+	// AtlantisVersion is the version of Atlantis that we're running.
+	// We append this to the UserAgent string in AWS calls.
+	AtlantisVersion string
 }
 
 // CreateSession creates a new valid AWS session to be used by AWS clients.
@@ -37,6 +41,10 @@ func (c *Config) CreateSession(sessionName string) (*session.Session, error) {
 	if _, err = awsSession.Config.Credentials.Get(); err != nil {
 		return nil, err
 	}
+	// Add a handler that appends "Atlantis/{version}" to the User Agent
+	// string on calls.
+	awsSession.Handlers.Build.PushBack(
+		request.MakeAddToUserAgentHandler("Atlantis", c.AtlantisVersion))
 
 	// generate a new session if aws role is provided
 	if c.RoleARN != "" {

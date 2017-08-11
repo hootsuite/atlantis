@@ -25,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -95,6 +96,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		awsConfig = &aws.Config{
 			Region:  config.AWSRegion,
 			RoleARN: config.AssumeRole,
+			AtlantisVersion: viper.GetString("version"),
 		}
 	}
 
