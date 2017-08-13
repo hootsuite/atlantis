@@ -17,17 +17,18 @@ import (
 // 2. Add a new field to server.ServerConfig and set the mapstructure tag equal to the flag name
 // 3. Add your flag's description etc. to the stringFlags, intFlags, or boolFlags slices
 const (
-	atlantisURLFlag     = "atlantis-url"
-	awsAssumeRoleFlag   = "aws-assume-role-arn"
-	awsRegionFlag       = "aws-region"
-	configFlag          = "config"
-	dataDirFlag         = "data-dir"
-	ghHostnameFlag      = "gh-hostname"
-	ghTokenFlag         = "gh-token"
-	ghUserFlag          = "gh-user"
-	logLevelFlag        = "log-level"
-	portFlag            = "port"
-	requireApprovalFlag = "require-approval"
+	atlantisURLFlag        = "atlantis-url"
+	awsAssumeRoleFlag      = "aws-assume-role-arn"
+	awsRegionFlag          = "aws-region"
+	configFlag             = "config"
+	dataDirFlag            = "data-dir"
+	ghHostnameFlag         = "gh-hostname"
+	ghTokenFlag            = "gh-token"
+	ghUserFlag             = "gh-user"
+	ghWebhookSecretKeyFlag = "gh-webhook-secret-key"
+	logLevelFlag           = "log-level"
+	portFlag               = "port"
+	requireApprovalFlag    = "require-approval"
 )
 
 var stringFlags = []stringFlag{
@@ -71,6 +72,11 @@ var stringFlags = []stringFlag{
 		name:        logLevelFlag,
 		description: "Log level. Either debug, info, warn, or error.",
 		value:       "info",
+	},
+	{
+		name:        ghWebhookSecretKeyFlag,
+		description: "Github webhook secret key. Can also be specified via the ATLANTIS_GH_WEBHOOK_SECRET_KEY environment variable.",
+		env:         "ATLANTIS_GH_WEBHOOK_SECRET_KEY",
 	},
 }
 var boolFlags = []boolFlag{

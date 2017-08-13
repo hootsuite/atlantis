@@ -11,8 +11,9 @@ import (
 )
 
 type EventParser struct {
-	GithubUser  string
-	GithubToken string
+	GithubUser             string
+	GithubToken            string
+	GithubWehbookSecretKey string
 }
 
 func (e *EventParser) DetermineCommand(comment *github.IssueCommentEvent) (*Command, error) {
