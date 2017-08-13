@@ -178,7 +178,7 @@ func (e *EventParser) ExtractRepoData(ghRepo *github.Repository) (models.Repo, e
 		return repo, errors.New("repository.clone_url is null")
 	}
 
-	// construct HTTPS repo clone url string with username and password
+	// construct HTTPS repo clone url string with username and token
 	repoCloneURLUsernameToken := strings.Replace(repoCloneURL, "https://", fmt.Sprintf("https://%s:%s@", e.GithubUser, e.GithubToken), -1)
 
 	return models.Repo{
