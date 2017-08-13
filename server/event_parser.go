@@ -173,19 +173,19 @@ func (e *EventParser) ExtractRepoData(ghRepo *github.Repository) (models.Repo, e
 	if repoName == "" {
 		return repo, errors.New("repository.name is null")
 	}
-	repoCloneURL := ghRepo.GetCloneURL()
-	if repoCloneURL == "" {
+	repoSanitizedCloneURL := ghRepo.GetCloneURL()
+	if repoSanitizedCloneURL == "" {
 		return repo, errors.New("repository.clone_url is null")
 	}
 
 	// construct HTTPS repo clone url string with username and password
-	repoCloneURLUsernameToken := strings.Replace(repoCloneURL, "https://", fmt.Sprintf("https://%s:%s@", e.GithubUser, e.GithubToken), -1)
+	repoCloneURL := strings.Replace(repoSanitizedCloneURL, "https://", fmt.Sprintf("https://%s:%s@", e.GithubUser, e.GithubToken), -1)
 
 	return models.Repo{
-		Owner:                 repoOwner,
-		FullName:              repoFullName,
-		CloneURL:              repoCloneURL,
-		CloneURLUsernameToken: repoCloneURLUsernameToken,
-		Name: repoName,
+		Owner:             repoOwner,
+		FullName:          repoFullName,
+		CloneURL:          repoCloneURL,
+		SanitizedCloneURL: repoSanitizedCloneURL,
+		Name:              repoName,
 	}, nil
 }
