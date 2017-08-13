@@ -309,5 +309,28 @@ We identify a project by its repo **and** the path to the root of the project wi
 #### Environment
 A Terraform environment. See [terraform docs](https://www.terraform.io/docs/state/environments.html) for more information.
 
+## FAQ
+**Q: Does Atlantis affect Terraform [remote state](https://www.terraform.io/docs/state/remote.html)?**
+
+A: No. Atlantis does not interfere with Terraform remote state in anyway.
+
+**Q: How does Atlantis locking interact with Terraform [locking](https://www.terraform.io/docs/state/locking.html)?**
+
+A: Atlantis provides locking of pull requests that prevents concurrent modification of the same infrastructure (Terraform project) where as Terraform locking only prevents two concurrent `terraform apply` from happening. 
+
+Terraform locking can be use along side Atlantis locking since Atlantis does not care what is defined in your Terraform project.
+
+**Q: How to run Atlantis in high availability mode? Does it need to be?**
+
+A: Atlantis server can easily be run under the supervision of a init system like `upstart` or `systemd` to make sure `atlantis server` is always running. 
+
+Atlantis stores all locking and Terraform plans locally on disk, that being said if that data is lost all you really need to do is run `atlantis plan` again on the pull requests that are open. If someone tries to run `atlantis apply` after the data has been lost then they will get an error back, so they will have to replan anyway.
+
+**Q: How to add SSL to Atlantis server?**
+
+A: You can front Atlantis server with HAProxy or Nginx to add SSL as a reverse proxy. Follow the document [here](./docs/nginx-ssl-proxy.md) to use configure Nginx with SSL as a reverse proxy.
+
+
+
 ## Credits
 * Atlantis Logo: Icon made by [freepik](https://www.flaticon.com/authors/freepik) from www.flaticon.com
