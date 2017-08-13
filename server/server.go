@@ -45,16 +45,17 @@ type Server struct {
 
 // the mapstructure tags correspond to flags in cmd/server.go
 type ServerConfig struct {
-	AWSRegion       string `mapstructure:"aws-region"`
-	AssumeRole      string `mapstructure:"aws-assume-role-arn"`
-	AtlantisURL     string `mapstructure:"atlantis-url"`
-	DataDir         string `mapstructure:"data-dir"`
-	GithubHostname  string `mapstructure:"gh-hostname"`
-	GithubToken     string `mapstructure:"gh-token"`
-	GithubUser      string `mapstructure:"gh-user"`
-	LogLevel        string `mapstructure:"log-level"`
-	Port            int    `mapstructure:"port"`
-	RequireApproval bool   `mapstructure:"require-approval"`
+	AWSRegion              string `mapstructure:"aws-region"`
+	AssumeRole             string `mapstructure:"aws-assume-role-arn"`
+	AtlantisURL            string `mapstructure:"atlantis-url"`
+	DataDir                string `mapstructure:"data-dir"`
+	GithubHostname         string `mapstructure:"gh-hostname"`
+	GithubToken            string `mapstructure:"gh-token"`
+	GithubUser             string `mapstructure:"gh-user"`
+	GithubWebhookSecretKey string `mapstructure:"webhook-secret-key"`
+	LogLevel               string `mapstructure:"log-level"`
+	Port                   int    `mapstructure:"port"`
+	RequireApproval        bool   `mapstructure:"require-approval"`
 }
 
 type CommandContext struct {
@@ -144,8 +145,9 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
 	eventParser := &EventParser{
-		GithubUser:  config.GithubUser,
-		GithubToken: config.GithubToken,
+		GithubUser:             config.GithubUser,
+		GithubToken:            config.GithubToken,
+		GithubWehbookSecretKey: config.GithubWebhookSecretKey,
 	}
 	commandHandler := &CommandHandler{
 		applyExecutor: applyExecutor,
@@ -300,6 +302,15 @@ func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
 func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 	githubReqID := "X-Github-Delivery=" + r.Header.Get("X-Github-Delivery")
 	var payload []byte
+
+	// validate payload if github webhook secret key is set
+	if s.eventParser.GithubWehbookSecretKey != "" {
+		_, err := gh.ValidatePayload(r, []byte(s.eventParser.GithubWehbookSecretKey))
+		if err != nil {
+			s.respond(w, logging.Warn, http.StatusBadRequest, "invalid payload signature: %s", err)
+			return
+		}
+	}
 
 	// webhook requests can either be application/json or application/x-www-form-urlencoded
 	if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
