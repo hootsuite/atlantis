@@ -52,7 +52,7 @@ type ServerConfig struct {
 	GithubHostname         string `mapstructure:"gh-hostname"`
 	GithubToken            string `mapstructure:"gh-token"`
 	GithubUser             string `mapstructure:"gh-user"`
-	GithubWebhookSecretKey string `mapstructure:"webhook-secret-key"`
+	GithubWebhookSecretKey string `mapstructure:"gh-webhook-secret-key"`
 	LogLevel               string `mapstructure:"log-level"`
 	Port                   int    `mapstructure:"port"`
 	RequireApproval        bool   `mapstructure:"require-approval"`
