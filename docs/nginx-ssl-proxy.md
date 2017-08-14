@@ -1,14 +1,14 @@
-# Nginx SSL Proxy
+# NGINX SSL Proxy
 This document shows how to configure Nginx with SSL as a reverse proxy for Atlantis server.
 
-Install Nginx
+* Install NGINX
 
 ```bash
 sudo apt-get update
 sudo apt-get install nginx
 ```
 
-Install a SSL Certificate
+* Install a SSL Certificate
 This certificate can be purchased or generated. Here is a example of generating a self signed SSL certificate.
 
 ```bash
@@ -17,7 +17,7 @@ sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/cert
 ```
 You will be prompted to enter some information about the certificate. Fill those as you like.
 
-Edit Nginx Config
+* Edit NGINX Config
 
 ```bash
 sudo vim /etc/nginx/sites-enabled/default
@@ -49,7 +49,7 @@ server {
       proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header        X-Forwarded-Proto $scheme;
 
-      # Fix the “It appears that your reverse proxy set up is broken" error.
+      # Fixes the “It appears that your reverse proxy set up is broken" error.
       proxy_pass          http://localhost:4141;
       proxy_read_timeout  90;
 
@@ -58,7 +58,7 @@ server {
   }
   ```
 
-  Restart Nginx
+  * Restart NGINX
 
   ```bash
   sudo service nginx restart
