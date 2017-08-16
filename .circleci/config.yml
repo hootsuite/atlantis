@@ -4,6 +4,8 @@ jobs:
     working_directory: /go/src/github.com/hootsuite/atlantis
     docker:
       - image: circleci/golang:1.8
+        environment:
+          TERRAFORM_VERSION: 0.10.0
     steps:
       - checkout
       - setup_remote_docker:
