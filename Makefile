@@ -24,13 +24,6 @@ deps: ## Download dependencies
 build-service: ## Build the main Go service
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o atlantis .
 
-build-docker-image: build-service ## Build the docker image for atlantis version eg. make build-docker-image version=ATLANTIS_VERSION
-	docker build -t $(IMAGE_NAME):$(version) .
-	docker tag $(IMAGE_NAME):$(version) $(IMAGE_NAME):latest
-
-push-docker-image: ## Push image to docker registry
-	docker push $(IMAGE_NAME):latest
-
 test: ## Run tests, coverage reports, and clean (coverage taints the compiled code)
 	go test $(PKG)
 
@@ -49,3 +42,9 @@ vendor-status:
 
 fmt: ## Run goimports (which also formats)
 	goimports -w $$(find . -type f -name '*.go' ! -path "./vendor/*" ! -path "./server/bindata_assetfs.go")
+
+end-to-end-deps: ## Install e2e dependencies
+	./scripts/e2e-deps.sh
+
+end-to-end-tests: ## Run e2e tests
+	./scripts/e2e.sh

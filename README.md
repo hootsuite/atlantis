@@ -258,6 +258,44 @@ $ atlantis server --atlantis-url $URL --gh-user $USERNAME --gh-token $TOKEN --gh
 Atlantis is now running!
 **We recommend running it under something like Systemd or Supervisord.**
 
+### Docker
+Atlantis also ships inside a docker image along side Terraform binaries. Run the docker image:
+
+```bash
+docker run -it hootsuite/atlantis server --gh-user=GITHUB_USERNAME --gh-token=GITHUB_TOKEN
+```
+
+#### Usage
+If you would like to add things like [AWS credential files](http://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html) to the docker image, you can do something like this:
+
+* Create a custom docker file
+```bash
+vim Dockerfile-custom
+```
+
+```dockerfile
+FROM hootsuite/atlantis
+
+# copy aws credentials
+COPY credentials /home/atlantis/.aws/credentials
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["server"]
+```
+
+* Build docker image
+
+```bash
+docker build -t hootsuite/atlantis-custom -f Dockerfile-custom
+```
+
+* Run docker image
+
+```bash
+docker run -it hootsuite/atlantis-custom server --gh-user=GITHUB_USERNAME --gh-token=GITHUB_TOKEN
+```
+
+
 ### Testing Out Atlantis
 
 If you'd like to test out Atlantis before running it on your own repositories you can fork our example repo.

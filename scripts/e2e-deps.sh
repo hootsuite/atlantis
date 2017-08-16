@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
 echo "Preparing to run e2e tests"
+if [ ! -f atlantis ]; then
+    echo "atlantis binary not found. exiting...."
+    exit 1
+fi
 mv atlantis ${WORKDIR}/e2e/
 
 # cd into e2e folder
