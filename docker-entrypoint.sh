@@ -1,12 +1,7 @@
 #!/bin/dumb-init /bin/sh
 set -e
 
-# Original: https://github.com/hashicorp/docker-consul/blob/2c2873f9d619220d1eef0bc46ec78443f55a10b5/0.X/docker-entrypoint.sh
-
-# Note above that we run dumb-init as PID 1 in order to reap zombie processes
-# as well as forward signals to all processes in its session. Normally, sh
-# wouldn't do either of these functions so we'd leak zombies as well as do
-# unclean termination of all our sub-processes.
+# Modified: https://github.com/hashicorp/docker-consul/blob/2c2873f9d619220d1eef0bc46ec78443f55a10b5/0.X/docker-entrypoint.sh
 
 # If the user is trying to run atlantis directly with some arguments, then
 # pass them to atlantis.
@@ -15,10 +10,7 @@ if [ "${1:0:1}" = '-' ]; then
 fi
 
 # Look for atlantis subcommands.
-if [ "$1" = '--version' ]; then
-    # This needs a special case because there's no help output.
-    set -- atlantis "$@"
-elif atlantis --help "$1" 2>&1 | grep -q "atlantis $1"; then
+if atlantis --help "$1" 2>&1 | grep -q "atlantis $1"; then
     # We can't use the return code to check for the existence of a subcommand, so
     # we have to use grep to look for a pattern in the help output.
     set -- atlantis "$@"
