@@ -1,6 +1,7 @@
 BUILD_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo no-commit-id)
 WORKSPACE := $(shell pwd)
 PKG := $(shell go list ./... | grep -v e2e | grep -v vendor | grep -v static)
+IMAGE_NAME := hootsuite/atlantis
 
 .PHONY: test
 
@@ -23,6 +24,13 @@ deps: ## Download dependencies
 build-service: ## Build the main Go service
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o atlantis .
 
+build-docker-image: build-service ## Build the docker image for atlantis version eg. make build-docker-image version=ATLANTIS_VERSION
+	docker build -t $(IMAGE_NAME):$(version) .
+	docker tag $(IMAGE_NAME):$(version) $(IMAGE_NAME):latest
+
+push-docker-image: ## Push image to docker registry
+	docker push $(IMAGE_NAME):latest
+
 test: ## Run tests, coverage reports, and clean (coverage taints the compiled code)
 	go test $(PKG)
 
@@ -34,7 +42,7 @@ dist: ## Package up everything in static/ using go-bindata-assetfs so it can be 
 	go-bindata-assetfs -pkg server static/... && mv bindata_assetfs.go server
 
 release: ## Create packages for a release
-	gox -os="darwin linux" -arch="amd64"
+	./scripts/binary-release.sh
 
 vendor-status:
 	@govendor status
