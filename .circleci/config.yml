@@ -17,6 +17,16 @@ jobs:
           name: Install e2e dependencies
           command: make end-to-end-deps
       - run:
+          name: Starting atlantis server in the background
+          command: cd "${CIRCLE_WORKING_DIRECTORY}/e2e" && ./atlantis server --gh-user="$GITHUB_USERNAME" --gh-token="$GITHUB_PASSWORD" --data-dir="/tmp" --log-level="debug" &> /tmp/atlantis-server.log
+          background: true
+      - run: sleep 2
+      - run: 
+          name: Starting ngrok
+          command: cd "${CIRCLE_WORKING_DIRECTORY}/e2e" && ./ngrok http 4141
+          background: true
+      - run: sleep 2
+      - run:
           name: Run e2e tests
           command: make end-to-end-tests
       - run:
