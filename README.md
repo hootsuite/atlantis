@@ -21,6 +21,7 @@
 * [Locking](#locking)
 * [Approvals](#approvals)
 * [Production-Ready Deployment](#production-ready-deployment)
+    * [Docker](#docker)
 * [Server Configuration](#server-configuration)
 * [AWS Credentials](#aws-credentials)
 * [Glossary](#glossary)
@@ -259,10 +260,10 @@ Atlantis is now running!
 **We recommend running it under something like Systemd or Supervisord.**
 
 ### Docker
-Atlantis also ships inside a docker image along side Terraform binaries. Run the docker image:
+Atlantis also ships inside a docker image with Terraform versions `0.8.8`, `0.9.11` and `0.10.0`. Run the docker image:
 
 ```bash
-docker run -it hootsuite/atlantis server --gh-user=GITHUB_USERNAME --gh-token=GITHUB_TOKEN
+docker run hootsuite/atlantis server --gh-user=GITHUB_USERNAME --gh-token=GITHUB_TOKEN
 ```
 
 #### Usage
@@ -278,21 +279,18 @@ FROM hootsuite/atlantis
 
 # copy aws credentials
 COPY credentials /home/atlantis/.aws/credentials
-
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["server"]
 ```
 
 * Build docker image
 
 ```bash
-docker build -t hootsuite/atlantis-custom -f Dockerfile-custom
+docker build -t {YOUR_DOCKER_ORG}/atlantis-custom -f Dockerfile-custom
 ```
 
 * Run docker image
 
 ```bash
-docker run -it hootsuite/atlantis-custom server --gh-user=GITHUB_USERNAME --gh-token=GITHUB_TOKEN
+docker run {YOUR_DOCKER_ORG}/atlantis-custom server --gh-user=GITHUB_USERNAME --gh-token=GITHUB_TOKEN
 ```
 
 
