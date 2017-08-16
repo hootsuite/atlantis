@@ -351,7 +351,7 @@ terraform {
 Terraform doesn't support interpolations in backend config so you will not be
 able to use `session_name = "${var.atlantis_user}"`. However, the backend assumed
 role is only used for state-related API actions. Any other API actions will be performed using
-the main assumed role and will have the session named as the GitHub user.
+the assumed role specified in the `aws` provider and will have the session named as the GitHub user.
 
 ## Glossary
 #### Project
