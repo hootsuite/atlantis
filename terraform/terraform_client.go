@@ -63,7 +63,7 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 	out, err := terraformCmd.CombinedOutput()
 	commandStr := strings.Join(terraformCmd.Args, " ")
 	if err != nil {
-		err := fmt.Errorf("%s: running %q in %q: %s", err, commandStr, path, out)
+		err := fmt.Errorf("%s: running %q in %q: \n%s", err, commandStr, path, out)
 		log.Debug("error: %s", err)
 		return "", err
 	}
