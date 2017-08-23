@@ -1,3 +1,12 @@
+# v0.1.2
+### Features
+- all flags passed to `atlantis plan` or `atlantis apply` will now be passed through to `terraform`. ([#131](https://github.com/hootsuite/atlantis/pull/131))
+
+* [atlantis_darwin_amd64.zip](https://github.com/hootsuite/atlantis/releases/download/v0.1.2/atlantis_darwin_amd64.zip)
+* [atlantis_linux_386.zip](https://github.com/hootsuite/atlantis/releases/download/v0.1.2/atlantis_linux_386.zip)
+* [atlantis_linux_amd64.zip](https://github.com/hootsuite/atlantis/releases/download/v0.1.2/atlantis_linux_amd64.zip)
+* [atlantis_linux_arm.zip](https://github.com/hootsuite/atlantis/releases/download/v0.1.2/atlantis_linux_arm.zip)
+
 # v0.1.1
 ### Backwards Incompatibilities / Notes:
 * `--aws-assume-role-arn` and `--aws-region` flags removed. Instead, to name the
