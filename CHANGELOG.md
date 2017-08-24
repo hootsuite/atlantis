@@ -3,6 +3,7 @@
 * all flags passed to `atlantis plan` or `atlantis apply` will now be passed through to `terraform`. ([#131](https://github.com/hootsuite/atlantis/pull/131))
 
 ## Bug Fixes
+* Fix command parsing when comment ends with newline. ([#131](https://github.com/hootsuite/atlantis/pull/131))
 * Plan and Apply outputs are shown in new line. ([#132](https://github.com/hootsuite/atlantis/pull/132))
 
 ## Downloads
