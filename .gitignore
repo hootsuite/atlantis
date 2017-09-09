@@ -4,3 +4,4 @@ atlantis
 .vscode
 atlantis.db
 output
+website/src/public
