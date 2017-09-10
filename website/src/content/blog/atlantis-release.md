@@ -1,19 +1,19 @@
 +++
-title = "Atlantis Open Source Release"
-description = ""
+title = "Atlantis: A Unified Workflow For Collaborating On Terraform"
+description = "Why we built Atlantis and how it's enabled us to more effectively collaborate on Terraform"
 weight = 20
 date = "2017-09-11T21:56:55-07:00"
 draft = false
 toc = true
 +++
 
-We're very excited to announce the open source release of Atlantis! Atlantis is a tool for collaborating on Terraform that's been in use at Hootsuite for over a year. The core functionality of Atlantis enables developers and operators to run `terraform plan` and `apply` directly from Terraform pull requests. Atlantis then comments back on the pull request with the output of the commands:
+We're very excited to announce the [open source](https://github.com/hootsuite/atlantis) release of Atlantis! Atlantis is a tool for collaborating on Terraform that's been in use at [Hootsuite](https://hootsuite.com) for over a year. The core functionality of Atlantis enables developers and operators to run `terraform plan` and `apply` directly from Terraform pull requests. Atlantis then comments back on the pull request with the output of the commands:
 
 <img src="/img/demo-large.gif">
 
 This is a simple feature, however it has had a massive effect on how our team writes Terraform. By bringing a Terraform workflow to pull requests, Atlantis helped our Ops team collaborate better on Terraform and also enabled our entire development team to write and execute Terraform safely.
 
-Atlantis was built to solve three problems that arose at Hootsuite as we adopted Terraform:
+Atlantis was built to solve two problems that arose at Hootsuite as we adopted Terraform:
 
 <div style="margin-bottom: 50px">
 <div style="margin-bottom: 25px">
@@ -26,44 +26,49 @@ Atlantis was built to solve three problems that arose at Hootsuite as we adopted
     <h3 style="margin-left: 70px; margin-bottom: -10px; line-height: 50px;">2. Developers Writing Terraform</h3>
     <p style="margin-left: 70px">How can we enable our developers to write and apply Terraform safely?</p>
 </div>
-<div style="margin-bottom: 25px">
-    <img alt="Lock Environment" style="display:inline; position: relative; float: left; margin-top: 18px" height="48" src="/img/locking.png" width="48">
-    <h3 style="margin-left: 70px; margin-bottom: -10px; line-height: 50px;">3. Manage Environments</h3>
-    <p style="margin-left: 70px">How can we manage multiple environments across our infrastructure?</p>
-</div>
 </div>
 
 ## Effective Collaboration
 
 When writing Terraform, there are a number of workflows you can follow. The simplest workflow is just using `master`:
 
-<img src="/img/master-flow.png">
+<p style="text-align: center">
+<img src="/img/master-flow.png" style="height: 150px">
+</p>
 
 In this workflow, you work on `master` and run `terraform` locally. The problem with this workflow is that there is no collaboration or code review. So we start to use pull requests:
 
 <img src="/img/pull-request-flow.png">
 
-We still run `terraform plan` locally, but once we're satisfied we create a pull request for review. When the pull request is approved, we run `apply` locally. This workflow is an improvement, but there are still problems. The first problem is that it's hard to review just the diff on the pull request. To properly review a change, you really need to see the output from `terraform plan`.
+We still run `terraform plan` locally, but once we're satisfied with the changes we create a pull request for review. When the pull request is approved, we run `apply` locally.
+
+This workflow is an improvement, but there are still problems. The first problem is that it's hard to review just the diff on the pull request. To properly review a change, you really need to see the output from `terraform plan`.
 
 {{< figure src="/img/diff.png" caption="What looks like a small change..." >}}
 
 {{< figure src="/img/diff-output.png" caption="...can have a big plan" >}}
 
-The second problem is that now it's easy for `master` to get out of sync with what's actually been applied. This can happen if you merge a pull request without running `apply` or if the `apply` has an error halfway through, you forget to fix it and then you merge to master. Now, what's in `master` isn't what's actually running on production. At best, this causes confusion the next time someone runs `terraform plan`. At worst, it causes an outage when someone assumes that what's in master is actually running, and depends on it.
+The second problem is that now it's easy for `master` to get out of sync with what's actually been applied. This can happen if you merge a pull request without running `apply` or if the `apply` has an error halfway through, you forget to fix it and then you merge to master. Now what's in `master` isn't actually what's running on production. At best, this causes confusion the next time someone runs `terraform plan`. At worst, it causes an outage when someone assumes that what's in master is actually running, and depends on it.
 
 With the Atlantis workflow, these problems are solved:
 
 <img src="/img/atlantis-flow.png">
 
-Now it's easy to review changes because you see the `terraform plan` output on the pull request. It's also easy to ensure that the pull request is `terraform apply`'d before merging to master because you can see the actual `apply` output on the pull request.
+Now it's easy to review changes because you see the `terraform plan` output on the pull request.
+
+{{< figure src="/img/comment.png" caption="Pull requests are easy to review since you can see the plan" >}}
+
+It's also easy to ensure that the pull request is `terraform apply`'d before merging to master because you can see the actual `apply` output on the pull request.
+
+{{< figure src="/img/apply-comment.png">}}
 
 So, Atlantis makes working on Terraform within an operations team much easier, but how does it help with getting your whole team to write Terraform?
 
 ## Developers Writing Terraform
 
-Terraform usually starts out at a company in the Ops team. As a result of using Terraform, the Ops team becomes much faster at making infrastructure changes, but the way developers request those changes remains the same: they use a ticketing system or chat to ask operations for help, the request goes into a queue and later Ops responds that the task is complete.
+Terraform usually starts out being used by the Ops team. As a result of using Terraform, the Ops team becomes much faster at making infrastructure changes, but the way developers request those changes remains the same: they use a ticketing system or chat to ask operations for help, the request goes into a queue and later Ops responds that the task is complete.
 
-However, soon the Ops team starts to realize that it's possible for developers to make some of these Terraform changes themselves! There are some problems that arise though:
+Soon however, the Ops team starts to realize that it's possible for developers to make some of these Terraform changes themselves! There are some problems that arise though:
 
 * Developers don't have the credentials to actually run Terraform commands
 * If you give them credentials, it's hard to review what is actually being applied
@@ -74,12 +79,9 @@ Since Atlantis comments back with the `plan` output directly on the pull request
 
 <img src="/img/approval-needed.png">
 
-With Atlantis, you can now enable your developers to write Terraform safely.
+With Atlantis, developers are able to write and apply Terraform safely. They submit pull requests, can run `atlantis plan` until their change looks good and then get approval from Ops to `apply`.
 
-Since the introduction of Atlantis at Hootsuite, we've had **78** contributors to our Terraform repositories. **58** of those were developers.
-
-## Manage Environments
-TODO
+Since the introduction of Atlantis at Hootsuite, we've had **78** contributors to our Terraform repositories, **58** of whom are developers (**75%**).
 
 ## Where we are now
 
@@ -87,6 +89,7 @@ Since the introduction of Atlantis at Hootsuite we've grown to 144 Terraform rep
 
 ## Getting started with Atlantis
 If you'd like to try out Atlantis for your team you can download the latest release from https://github.com/hootsuite/atlantis/releases. If you run `atlantis bootstrap` you can get started in less than 5 minutes.
+To read more about Atlantis go to https://github.com/hootsuite/atlantis.
 
 Check out our video for more information:
 {{< youtube TmIPWda0IKg >}}
