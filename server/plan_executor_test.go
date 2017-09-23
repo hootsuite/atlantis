@@ -3,6 +3,7 @@ package server
 import (
 	"testing"
 
+	version "github.com/hashicorp/go-version"
 	. "github.com/hootsuite/atlantis/testing_util"
 )
 
@@ -25,4 +26,12 @@ func runTest(t *testing.T, testDescrip string, filesChanged []string, expectedPa
 		t.Log(testDescrip)
 		Equals(t, expectedPaths[i], p.Path)
 	}
+}
+
+func TestPopulateRuntimeVariables(t *testing.T) {
+	extraArgs := []string{"-backend-config=env/${ENVIRONMENT}.tfvars", "-no-color"}
+	expectedArgs := []string{"-backend-config=env/testing.tfvars", "-no-color"}
+	tfVersion, _ := version.NewVersion("0.1.1")
+	args := p.populateRuntimeVariables(extraArgs, "./workspace", "testing", tfVersion)
+	Equals(t, expectedArgs, args)
 }
