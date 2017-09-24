@@ -116,6 +116,9 @@ func (p *PlanExecutor) plan(ctx *CommandContext, repoDir string, project models.
 	}
 	ctx.Log.Info("acquired lock with id %q", lockAttempt.LockKey)
 
+	// check if terraform version is >= 0.9.0
+	terraformVersion := p.terraform.Version()
+
 	// check if config file is found, if not we continue the run
 	var config ProjectConfig
 	absolutePath := filepath.Join(repoDir, project.Path)
@@ -126,18 +129,18 @@ func (p *PlanExecutor) plan(ctx *CommandContext, repoDir string, project models.
 			return ProjectResult{Error: err}
 		}
 		ctx.Log.Info("parsed atlantis config file in %q", absolutePath)
-		planExtraArgs = config.GetExtraArguments(ctx.Command.Name.String())
+		// check if there was terraform version specified in the project config
+		// if so then we override the default terraform version
+		if config.TerraformVersion != nil {
+			terraformVersion = config.TerraformVersion
+		}
+		planExtraArgs = populateRuntimeEnvironmentVariables(config.GetExtraArguments(ctx.Command.Name.String()), absolutePath, tfEnv, terraformVersion)
 	}
 
-	// check if terraform version is >= 0.9.0
-	terraformVersion := p.terraform.Version()
-	if config.TerraformVersion != nil {
-		terraformVersion = config.TerraformVersion
-	}
 	constraints, _ := version.NewConstraint(">= 0.9.0")
 	if constraints.Check(terraformVersion) {
 		ctx.Log.Info("determined that we are running terraform with version >= 0.9.0. Running version %s", terraformVersion)
-		_, err := p.terraform.RunInitAndEnv(ctx.Log, absolutePath, tfEnv, config.GetExtraArguments("init"), terraformVersion)
+		_, err := p.terraform.RunInitAndEnv(ctx.Log, absolutePath, tfEnv, populateRuntimeEnvironmentVariables(config.GetExtraArguments("init"), absolutePath, tfEnv, terraformVersion), terraformVersion)
 		if err != nil {
 			return ProjectResult{Error: err}
 		}
@@ -245,19 +248,4 @@ func (p *PlanExecutor) errorResponse(ctx *CommandContext, err error) CommandResp
 	ctx.Log.Err(err.Error())
 	p.githubStatus.Update(ctx.BaseRepo, ctx.Pull, Error, PlanStep)
 	return CommandResponse{Error: err}
-}
-
-// populateRuntimeVariables populates the terraform extra vars specified in the project config file
-// with atlantis specific environment variables
-func (p *PlanExecutor) populateRuntimeVariables(extraArgs []string, workspaceDir string, tfEnv string, tfVersion *version.Version) []string {
-	var extraArgsFinal []string
-	for _, v := range extraArgs {
-		if strings.Contains(v, "${ENVIRONMENT}") || strings.Contains(v, "${ATLANTIS_TERRAFORM_VERSION}") || strings.Contains(v, "${WORKSPACE}") {
-			v = strings.Replace(v, "${ENVIRONMENT}", tfEnv, -1)
-			v = strings.Replace(v, "${ATLANTIS_TERRAFORM_VERSION}", tfVersion.String(), -1)
-			v = strings.Replace(v, "${WORKSPACE}", workspaceDir, -1)
-		}
-		extraArgsFinal = append(extraArgsFinal, v)
-	}
-	return extraArgsFinal
 }

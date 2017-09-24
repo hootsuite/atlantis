@@ -110,6 +110,9 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	}
 	ctx.Log.Info("acquired lock with id %q", lockAttempt.LockKey)
 
+	// check if terraform version is >= 0.9.0
+	terraformVersion := a.terraform.Version()
+
 	// check if config file is found, if not we continue the run
 	absolutePath := filepath.Dir(plan.LocalPath)
 	var applyExtraArgs []string
@@ -120,18 +123,18 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 			return ProjectResult{Error: err}
 		}
 		ctx.Log.Info("parsed atlantis config file in %q", absolutePath)
-		applyExtraArgs = config.GetExtraArguments(ctx.Command.Name.String())
+		// check if there was terraform version specified in the project config
+		// if so then we override the default terraform version
+		if config.TerraformVersion != nil {
+			terraformVersion = config.TerraformVersion
+		}
+		applyExtraArgs = populateRuntimeEnvironmentVariables(config.GetExtraArguments(ctx.Command.Name.String()), absolutePath, tfEnv, terraformVersion)
 	}
 
-	// check if terraform version is >= 0.9.0
-	terraformVersion := a.terraform.Version()
-	if config.TerraformVersion != nil {
-		terraformVersion = config.TerraformVersion
-	}
 	constraints, _ := version.NewConstraint(">= 0.9.0")
 	if constraints.Check(terraformVersion) {
 		ctx.Log.Info("determined that we are running terraform with version >= 0.9.0. Running version %s", terraformVersion)
-		_, err := a.terraform.RunInitAndEnv(ctx.Log, absolutePath, tfEnv, config.GetExtraArguments("init"), terraformVersion)
+		_, err := a.terraform.RunInitAndEnv(ctx.Log, absolutePath, tfEnv, populateRuntimeEnvironmentVariables(config.GetExtraArguments("init"), absolutePath, tfEnv, terraformVersion), terraformVersion)
 		if err != nil {
 			return ProjectResult{Error: err}
 		}
