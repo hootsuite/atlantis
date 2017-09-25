@@ -73,8 +73,9 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 	envVars = append(envVars, os.Environ()...)
 
 	// append terraform executable name with args
-	tfArgs := []string{"-c", tfExecutable}
+	tfArgs := []string{"-c", "'", tfExecutable}
 	tfArgs = append(tfArgs, args...)
+	tfArgs = append(tfArgs, "'")
 
 	terraformCmd := exec.Command("bash", tfArgs...)
 	terraformCmd.Dir = path
