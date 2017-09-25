@@ -52,7 +52,8 @@ func (c *Client) Version() *version.Version {
 }
 
 // RunCommandWithVersion executes the provided version of terraform with
-// the provided args in path.
+// the provided args in path. The variable "v" is the version of terraform executable to use and the variable "env" is the
+// environment specified by the user commenting "atlantis plan/apply {env}" which is set to "default" by default.
 func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, args []string, v *version.Version, env string) (string, error) {
 	tfExecutable := "terraform"
 	// if version is the same as the default, don't need to prepend the version name to the executable
@@ -75,7 +76,7 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 	// append terraform executable name with args
 	tfCmd := fmt.Sprintf("%s %s", tfExecutable, strings.Join(args, " "))
 
-	terraformCmd := exec.Command("bash", "-c", tfCmd)
+	terraformCmd := exec.Command("sh", "-c", tfCmd)
 	terraformCmd.Dir = path
 	terraformCmd.Env = envVars
 	out, err := terraformCmd.CombinedOutput()
