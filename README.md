@@ -414,6 +414,16 @@ able to use `session_name = "${var.atlantis_user}"`. However, the backend assume
 role is only used for state-related API actions. Any other API actions will be performed using
 the assumed role specified in the `aws` provider and will have the session named as the GitHub user.
 
+## Developing 
+
+- Create your own terraform repo, ex. https://github.hootops.com/jbloggs/atlantis-terraform-test
+- Edit the webhook and use `ngrok http 4141` to get the ngrok url
+- In golang:
+	- `go install` in the atlantis directory
+        - make sure you $PATH is `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/go/bin:/Users/jbloggs/go/bin`
+        - github > settings > personal access tokens > create new token > ensure you check “repo”
+        - atlantis server --gh-user jbloggs --gh-token xxxx --log-level debug
+	
 ## Glossary
 #### Project
 A Terraform project. Multiple projects can be in a single GitHub repo.
