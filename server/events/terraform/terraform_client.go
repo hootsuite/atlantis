@@ -100,22 +100,31 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 // RunInitAndEnv executes "terraform init" and "terraform env select" in path.
 // env is the environment to select and extraInitArgs are additional arguments
 // applied to the init command.
-func (c *Client) RunInitAndEnv(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, version *version.Version) ([]string, error) {
+func (c *Client) RunInitAndEnv(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, v *version.Version) ([]string, error) {
 	var outputs []string
 	// run terraform init
-	output, err := c.RunCommandWithVersion(log, path, append([]string{"init", "-no-color"}, extraInitArgs...), version, env)
+	output, err := c.RunCommandWithVersion(log, path, append([]string{"init", "-no-color"}, extraInitArgs...), v, env)
 	outputs = append(outputs, output)
 	if err != nil {
 		return outputs, err
 	}
 
+	// terraform env or workspace selection based on version
+	// we will use 'terraform env' for terraform versions < 0.10.x
+	// and we will use 'terraform workspace' for terraform versions >= 0.10.x
+	tfCmdStr := "env"
+	constraints, _ := version.NewConstraint(">= 0.10.0")
+	if constraints.Check(v) {
+		tfCmdStr = "workspace"
+	}
+
 	// run terraform env new and select
-	output, err = c.RunCommandWithVersion(log, path, []string{"env", "select", "-no-color", env}, version, env)
+	output, err = c.RunCommandWithVersion(log, path, []string{tfCmdStr, "select", "-no-color", env}, v, env)
 	outputs = append(outputs, output)
 	if err != nil {
 		// if terraform env select fails we will run terraform env new
 		// to create a new environment
-		output, err = c.RunCommandWithVersion(log, path, []string{"env", "new", "-no-color", env}, version, env)
+		output, err = c.RunCommandWithVersion(log, path, []string{tfCmdStr, "new", "-no-color", env}, v, env)
 		outputs = append(outputs, output)
 		if err != nil {
 			return outputs, err
