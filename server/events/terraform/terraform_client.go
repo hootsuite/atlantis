@@ -18,7 +18,7 @@ import (
 type Runner interface {
 	Version() *version.Version
 	RunCommandWithVersion(log *logging.SimpleLogger, path string, args []string, v *version.Version, env string) (string, error)
-	RunInitAndEnv(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, version *version.Version) ([]string, error)
+	RunInitAndWorkspace(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, version *version.Version) ([]string, error)
 }
 
 type Client struct {
