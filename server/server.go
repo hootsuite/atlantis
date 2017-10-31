@@ -97,6 +97,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 		Workspace:         workspace,
 		ProjectPreExecute: projectPreExecute,
 		Locker:            lockingClient,
+		ModifiedProject:   &events.ModifiedProject{},
 	}
 	helpExecutor := &events.HelpExecutor{}
 	pullClosedExecutor := &events.PullClosedExecutor{
