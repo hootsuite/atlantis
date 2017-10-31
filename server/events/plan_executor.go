@@ -29,12 +29,12 @@ const atlantisUserTFVar = "atlantis_user"
 // including integration with S3, Terraform, and GitHub
 type PlanExecutor struct {
 	Github            github.Client
-	Terraform         *terraform.Client
+	Terraform         terraform.Runner
 	Locker            locking.Locker
 	LockURL           func(id string) (url string)
-	Run               *run.Run
+	Run               run.Runner
 	Workspace         Workspace
-	ProjectPreExecute *ProjectPreExecute
+	ProjectPreExecute ProjectPreExecutor
 	ModifiedProject   ModifiedProjectDetector
 }
 
@@ -55,6 +55,9 @@ func (p *PlanExecutor) Execute(ctx *CommandContext) CommandResponse {
 	}
 	ctx.Log.Info("found %d files modified in this pull request", len(modifiedFiles))
 	projects := p.ModifiedProject.GetModified(ctx.Log, modifiedFiles, ctx.BaseRepo.FullName)
+	if len(projects) == 0 {
+		return CommandResponse{Failure: "No Terraform files were modified."}
+	}
 
 	cloneDir, err := p.Workspace.Clone(ctx.Log, ctx.BaseRepo, ctx.HeadRepo, ctx.Pull, ctx.Command.Environment)
 	if err != nil {

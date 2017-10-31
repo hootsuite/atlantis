@@ -25,8 +25,8 @@ type Client interface {
 
 // ConcreteClient is used to perform GitHub actions.
 type ConcreteClient struct {
-	client *github.Client
-	ctx    context.Context
+	Client *github.Client
+	Ctx    context.Context
 }
 
 // NewClient returns a valid GitHub client.
@@ -49,8 +49,8 @@ func NewClient(hostname string, user string, pass string) (*ConcreteClient, erro
 	}
 
 	return &ConcreteClient{
-		client: client,
-		ctx:    context.Background(),
+		Client: client,
+		Ctx:    context.Background(),
 	}, nil
 }
 
@@ -66,7 +66,7 @@ func (c *ConcreteClient) GetModifiedFiles(repo models.Repo, pull models.PullRequ
 		if nextPage != 0 {
 			opts.Page = nextPage
 		}
-		pageFiles, resp, err := c.client.PullRequests.ListFiles(c.ctx, repo.Owner, repo.Name, pull.Num, &opts)
+		pageFiles, resp, err := c.Client.PullRequests.ListFiles(c.Ctx, repo.Owner, repo.Name, pull.Num, &opts)
 		if err != nil {
 			return files, err
 		}
@@ -83,13 +83,13 @@ func (c *ConcreteClient) GetModifiedFiles(repo models.Repo, pull models.PullRequ
 
 // CreateComment creates a comment on the pull request.
 func (c *ConcreteClient) CreateComment(repo models.Repo, pull models.PullRequest, comment string) error {
-	_, _, err := c.client.Issues.CreateComment(c.ctx, repo.Owner, repo.Name, pull.Num, &github.IssueComment{Body: &comment})
+	_, _, err := c.Client.Issues.CreateComment(c.Ctx, repo.Owner, repo.Name, pull.Num, &github.IssueComment{Body: &comment})
 	return err
 }
 
 // PullIsApproved returns true if the pull request was approved.
 func (c *ConcreteClient) PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error) {
-	reviews, _, err := c.client.PullRequests.ListReviews(c.ctx, repo.Owner, repo.Name, pull.Num, nil)
+	reviews, _, err := c.Client.PullRequests.ListReviews(c.Ctx, repo.Owner, repo.Name, pull.Num, nil)
 	if err != nil {
 		return false, errors.Wrap(err, "getting reviews")
 	}
@@ -103,7 +103,7 @@ func (c *ConcreteClient) PullIsApproved(repo models.Repo, pull models.PullReques
 
 // GetPullRequest returns the pull request.
 func (c *ConcreteClient) GetPullRequest(repo models.Repo, num int) (*github.PullRequest, *github.Response, error) {
-	return c.client.PullRequests.Get(c.ctx, repo.Owner, repo.Name, num)
+	return c.Client.PullRequests.Get(c.Ctx, repo.Owner, repo.Name, num)
 }
 
 // UpdateStatus updates the status badge on the pull request.
@@ -113,6 +113,6 @@ func (c *ConcreteClient) UpdateStatus(repo models.Repo, pull models.PullRequest,
 		State:       github.String(state),
 		Description: github.String(description),
 		Context:     github.String(context)}
-	_, _, err := c.client.Repositories.CreateStatus(c.ctx, repo.Owner, repo.Name, pull.HeadCommit, status)
+	_, _, err := c.Client.Repositories.CreateStatus(c.Ctx, repo.Owner, repo.Name, pull.HeadCommit, status)
 	return err
 }
