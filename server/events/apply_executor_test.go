@@ -2,6 +2,8 @@ package events_test
 
 import (
 	"errors"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/hootsuite/atlantis/server/events"
@@ -9,13 +11,12 @@ import (
 	eventMocks "github.com/hootsuite/atlantis/server/events/mocks"
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/logging"
-	. "github.com/hootsuite/atlantis/testing_util"
+	. "github.com/hootsuite/atlantis/testing"
 	. "github.com/petergtz/pegomock"
 )
 
 func TestExecute_RequireApprovalError(t *testing.T) {
-	t.Log("if while checking the pull request is approved there is an error, we are " +
-		"returning an error")
+	t.Log("If checking whether pull request is approved there is an error we are returning it")
 
 	g := ghMocks.NewMockClient()
 	ctx := &events.CommandContext{
@@ -32,7 +33,7 @@ func TestExecute_RequireApprovalError(t *testing.T) {
 }
 
 func TestExecute_RequireApprovalIfApproved(t *testing.T) {
-	t.Log("if the pull request is not approved there is a error and we are returning it")
+	t.Log("If the pull request is not approved there is a failure and we are returning it")
 
 	g := ghMocks.NewMockClient()
 	ctx := &events.CommandContext{
@@ -49,7 +50,7 @@ func TestExecute_RequireApprovalIfApproved(t *testing.T) {
 }
 
 func TestExecute_GetWorkspaceError(t *testing.T) {
-	t.Log("if while getting workspace we are returning an error")
+	t.Log("If while getting workspace there is an error we should return a failure")
 
 	w := eventMocks.NewMockWorkspace()
 	ctx := &events.CommandContext{
@@ -65,8 +66,8 @@ func TestExecute_GetWorkspaceError(t *testing.T) {
 	Equals(t, "No workspace found. Did you run plan?", response.Failure)
 }
 
-func TestExecute_NoPlansFoundError(t *testing.T) {
-	t.Log("if no plans are found for an environment we are returning an error")
+func TestExecute_NoPlansFoundFailure(t *testing.T) {
+	t.Log("If no plans are found for an environment we are returning an failure")
 
 	g := ghMocks.NewMockClient()
 	w := eventMocks.NewMockWorkspace()
@@ -76,12 +77,15 @@ func TestExecute_NoPlansFoundError(t *testing.T) {
 		Command:  &events.Command{Environment: "test"},
 		Log:      logging.NewNoopLogger(),
 	}
+	// Create a temporary directory so we don't iterate over an entire directory
+	dir, _ := ioutil.TempDir("", "example-dir")
+	defer os.RemoveAll(dir) // clean up
 	applyExecutor := &events.ApplyExecutor{
 		Github:          g,
 		RequireApproval: false,
 		Workspace:       w,
 	}
-	When(w.GetWorkspace(ctx.BaseRepo, ctx.Pull, ctx.Command.Environment)).ThenReturn("/tmp", nil)
+	When(w.GetWorkspace(ctx.BaseRepo, ctx.Pull, ctx.Command.Environment)).ThenReturn(dir, nil)
 	response := applyExecutor.Execute(ctx)
 	Equals(t, "No plans found for that environment.", response.Failure)
 }
