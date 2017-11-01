@@ -14,8 +14,8 @@ import (
 	rmocks "github.com/hootsuite/atlantis/server/events/run/mocks"
 	tmocks "github.com/hootsuite/atlantis/server/events/terraform/mocks"
 	"github.com/hootsuite/atlantis/server/logging"
-	. "github.com/hootsuite/atlantis/testing_util"
 	. "github.com/petergtz/pegomock"
+	. "github.com/hootsuite/atlantis/testing"
 )
 
 var planCtx = events.CommandContext{
