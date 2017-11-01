@@ -16,11 +16,11 @@ import (
 
 type ApplyExecutor struct {
 	Github            github.Client
-	Terraform         *terraform.Client
+	Terraform         terraform.Runner
 	RequireApproval   bool
-	Run               *run.Run
+	Run               run.Runner
 	Workspace         Workspace
-	ProjectPreExecute *ProjectPreExecute
+	ProjectPreExecute ProjectPreExecutor
 }
 
 func (a *ApplyExecutor) Execute(ctx *CommandContext) CommandResponse {
