@@ -5,7 +5,7 @@ import (
 
 	"github.com/hootsuite/atlantis/server/events"
 	"github.com/hootsuite/atlantis/server/logging"
-	. "github.com/hootsuite/atlantis/testing_util"
+	. "github.com/hootsuite/atlantis/testing"
 )
 
 var log = logging.NewNoopLogger()
