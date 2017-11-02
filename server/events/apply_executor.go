@@ -11,11 +11,13 @@ import (
 	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/run"
+	"github.com/hootsuite/atlantis/server/events/slack"
 	"github.com/hootsuite/atlantis/server/events/terraform"
 )
 
 type ApplyExecutor struct {
 	Github            github.Client
+	Slack             slack.Client
 	Terraform         *terraform.Client
 	RequireApproval   bool
 	Run               *run.Run
@@ -93,7 +95,13 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	tfApplyCmd := append(append(append([]string{"apply", "-no-color"}, applyExtraArgs...), ctx.Command.Flags...), plan.LocalPath)
 	output, err := a.Terraform.RunCommandWithVersion(ctx.Log, absolutePath, tfApplyCmd, terraformVersion, env)
 	if err != nil {
+		if a.Slack != nil {
+			a.Slack.PostMessage(createSlackMessage(ctx, false))
+		}
 		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
+	}
+	if a.Slack != nil {
+		a.Slack.PostMessage(createSlackMessage(ctx, true))
 	}
 	ctx.Log.Info("apply succeeded")
 
@@ -105,4 +113,20 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	}
 
 	return ProjectResult{ApplySuccess: output}
+}
+
+func createSlackMessage(ctx *CommandContext, success bool) string {
+	var status string
+	if success {
+		status = ":white_check_mark:"
+	} else {
+		status = ":x:"
+	}
+
+	return fmt.Sprintf("%s *%s* %s in <%s|%s>.",
+		status,
+		ctx.User.Username,
+		ctx.Command.Name.String()+" "+ctx.Command.Environment,
+		ctx.Pull.URL,
+		ctx.BaseRepo.Name)
 }

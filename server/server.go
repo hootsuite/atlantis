@@ -18,6 +18,7 @@ import (
 	"github.com/hootsuite/atlantis/server/events/locking"
 	"github.com/hootsuite/atlantis/server/events/locking/boltdb"
 	"github.com/hootsuite/atlantis/server/events/run"
+	"github.com/hootsuite/atlantis/server/events/slack"
 	"github.com/hootsuite/atlantis/server/events/terraform"
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/static"
@@ -53,6 +54,8 @@ type Config struct {
 	LogLevel            string `mapstructure:"log-level"`
 	Port                int    `mapstructure:"port"`
 	RequireApproval     bool   `mapstructure:"require-approval"`
+	SlackToken          string `mapstructure:"slack-token"`
+	SlackChannel        string `mapstructure:"slack-channel"`
 }
 
 func NewServer(config Config) (*Server, error) {
@@ -61,6 +64,14 @@ func NewServer(config Config) (*Server, error) {
 		return nil, err
 	}
 	githubStatus := &events.GithubStatus{Client: githubClient}
+	// nil slackClient unless token and channel was specified
+	var slackClient slack.Client
+	if config.SlackToken != "" && config.SlackChannel != "" {
+		slackClient, err = slack.NewClient(config.SlackToken, config.SlackChannel)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing slack client")
+		}
+	}
 	terraformClient, err := terraform.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing terraform")
@@ -86,6 +97,7 @@ func NewServer(config Config) (*Server, error) {
 	}
 	applyExecutor := &events.ApplyExecutor{
 		Github:            githubClient,
+		Slack:             slackClient,
 		Terraform:         terraformClient,
 		RequireApproval:   config.RequireApproval,
 		Run:               run,
