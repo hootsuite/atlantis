@@ -128,6 +128,12 @@
   revision = "491d3605edfb866af34a48075bd4355ac1bf46ca"
 
 [[projects]]
+  name = "github.com/nlopes/slack"
+  packages = ["."]
+  revision = "c86337c0ef2486a15edd804355d9c73d2f2caed1"
+  version = "v0.1.0"
+
+[[projects]]
   name = "github.com/onsi/gomega"
   packages = ["format"]
   revision = "c893efa28eb45626cdaa76c9f653b62488858837"
@@ -213,6 +219,12 @@
 
 [[projects]]
   branch = "master"
+  name = "golang.org/x/net"
+  packages = ["websocket"]
+  revision = "49e6db1c9ed2b2fdbc57fd579f0ca8f6082350be"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
   revision = "062cd7e4e68206d8bab9b18396626e855c992658"
@@ -232,6 +244,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ff26f498317e49b0c36b98f2ec0b91a1b7c9ccfb4b04777a3f1e8f7e143828b7"
+  inputs-digest = "5e8c87c04d918bc938263e349dcc8f9184c550cbe7eab19fbb4c420f87b6d4f9"
   solver-name = "gps-cdcl"
   solver-version = 1
