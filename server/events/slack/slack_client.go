@@ -1,52 +1,61 @@
 package slack
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/nlopes/slack"
 )
 
 type Client interface {
-	PostMessage(text string) (string, error)
+	PostMessage(channel string, template SlackMessageTemplate) (string, error)
 }
 
 type ConcreteClient struct {
-	client  *slack.Client
-	channel string
+	client *slack.Client
 }
 
-func NewClient(slackToken string, channelName string) (*ConcreteClient, error) {
+type SlackMessageTemplate struct {
+	Success     bool
+	Username    string
+	CommandName string
+	RepoName    string
+	PullURL     string
+}
+
+func NewClient(slackToken string) (Client, error) {
 	slackClient := slack.New(slackToken)
 
-	if _, err := slackClient.AuthTest(); err != nil {
-		return nil, err
-	}
-
-	// https://api.slack.com/faq
-	// 'How do I find a channel's ID if I only have its #name?'
-	// says need to look through all channels and match the name
-	channels, err := slackClient.GetChannels(true)
+	_, err := slackClient.AuthTest()
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range channels {
-		if c.Name == channelName {
-			// channel exists, no errors
-			return &ConcreteClient{
-				client:  slackClient,
-				channel: channelName,
-			}, nil
-		}
-	}
 
-	return nil, errors.New("channel_not_found")
+	return &ConcreteClient{
+		client: slackClient,
+	}, nil
 }
 
-func (s *ConcreteClient) PostMessage(text string) (string, error) {
+func (s *ConcreteClient) PostMessage(channel string, template SlackMessageTemplate) (string, error) {
 	params := slack.NewPostMessageParameters()
 	params.AsUser = true
 	params.EscapeText = false
 
-	_, timestamp, err := s.client.PostMessage(s.channel, text, params)
+	text := s.createMessage(template)
+	_, timestamp, err := s.client.PostMessage(channel, text, params)
 	return timestamp, err
+}
+
+func (s *ConcreteClient) createMessage(template SlackMessageTemplate) string {
+	var status string
+	if template.Success {
+		status = ":white_check_mark:"
+	} else {
+		status = ":x:"
+	}
+	return fmt.Sprintf("%s *%s* %s in <%s|%s>.",
+		status,
+		template.Username,
+		template.CommandName,
+		template.PullURL,
+		template.RepoName)
 }

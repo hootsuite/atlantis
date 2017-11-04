@@ -3,6 +3,7 @@ package events
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/pkg/errors"
 
@@ -11,14 +12,13 @@ import (
 	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/run"
-	"github.com/hootsuite/atlantis/server/events/slack"
 	"github.com/hootsuite/atlantis/server/events/terraform"
 )
 
 type ApplyExecutor struct {
 	Github            github.Client
-	Slack             slack.Client
 	Terraform         *terraform.Client
+	WSRegexToHook     map[string]HookExecutor
 	RequireApproval   bool
 	Run               *run.Run
 	Workspace         Workspace
@@ -94,14 +94,21 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	env := ctx.Command.Environment
 	tfApplyCmd := append(append(append([]string{"apply", "-no-color"}, applyExtraArgs...), ctx.Command.Flags...), plan.LocalPath)
 	output, err := a.Terraform.RunCommandWithVersion(ctx.Log, absolutePath, tfApplyCmd, terraformVersion, env)
-	if err != nil {
-		if a.Slack != nil {
-			a.Slack.PostMessage(createSlackMessage(ctx, false))
+
+	// execute apply webhooks
+	for workspaceRegex, hookExecutor := range a.WSRegexToHook {
+		matched, err := regexp.MatchString(workspaceRegex, ctx.Command.Environment)
+		if err != nil {
+			// log the regexp error but let's continue with the apply
+			ctx.Log.Debug(err.Error())
 		}
-		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
+		if matched {
+			hookExecutor.ExecuteHook(ctx)
+		}
 	}
-	if a.Slack != nil {
-		a.Slack.PostMessage(createSlackMessage(ctx, true))
+
+	if err != nil {
+		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
 	}
 	ctx.Log.Info("apply succeeded")
 
@@ -113,20 +120,4 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	}
 
 	return ProjectResult{ApplySuccess: output}
-}
-
-func createSlackMessage(ctx *CommandContext, success bool) string {
-	var status string
-	if success {
-		status = ":white_check_mark:"
-	} else {
-		status = ":x:"
-	}
-
-	return fmt.Sprintf("%s *%s* %s in <%s|%s>.",
-		status,
-		ctx.User.Username,
-		ctx.Command.Name.String()+" "+ctx.Command.Environment,
-		ctx.Pull.URL,
-		ctx.BaseRepo.Name)
 }

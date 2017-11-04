@@ -45,33 +45,78 @@ type Server struct {
 // The mapstructure tags correspond to flags in cmd/server.go and are used when
 // the config is parsed from a YAML file.
 type Config struct {
-	AtlantisURL         string `mapstructure:"atlantis-url"`
-	DataDir             string `mapstructure:"data-dir"`
-	GithubHostname      string `mapstructure:"gh-hostname"`
-	GithubToken         string `mapstructure:"gh-token"`
-	GithubUser          string `mapstructure:"gh-user"`
-	GithubWebHookSecret string `mapstructure:"gh-webhook-secret"`
-	LogLevel            string `mapstructure:"log-level"`
-	Port                int    `mapstructure:"port"`
-	RequireApproval     bool   `mapstructure:"require-approval"`
-	SlackToken          string `mapstructure:"slack-token"`
-	SlackChannel        string `mapstructure:"slack-channel"`
+	AtlantisURL         string    `mapstructure:"atlantis-url"`
+	DataDir             string    `mapstructure:"data-dir"`
+	GithubHostname      string    `mapstructure:"gh-hostname"`
+	GithubToken         string    `mapstructure:"gh-token"`
+	GithubUser          string    `mapstructure:"gh-user"`
+	GithubWebHookSecret string    `mapstructure:"gh-webhook-secret"`
+	LogLevel            string    `mapstructure:"log-level"`
+	Port                int       `mapstructure:"port"`
+	RequireApproval     bool      `mapstructure:"require-approval"`
+	SlackToken          string    `mapstructure:"slack-token"`
+	Webhooks            []Webhook `mapstructure:"webhooks"`
+}
+
+type Webhook struct {
+	Event          string `mapstructure:"event"`
+	WorkspaceRegex string `mapstructure:"workspace-regex"`
+	Kind           string `mapstructure:"kind"`
+	// Slack specific
+	Channel string `mapstructure:"channel"`
+}
+
+type HookExecutorBuilder struct {
+	Slack slack.Client
+}
+
+func (builder *HookExecutorBuilder) build(webhook Webhook) (events.HookExecutor, error) {
+	switch kind := webhook.Kind; kind {
+	case "slack":
+		if builder.Slack == nil {
+			// TODO: better error here?
+			return nil, errors.New("slack client not initialized")
+		}
+		return &events.SlackhookExecutor{
+			Slack:   builder.Slack,
+			Channel: webhook.Channel,
+		}, nil
+	default:
+		return nil, fmt.Errorf("%q webhook kind not supported", kind)
+	}
 }
 
 func NewServer(config Config) (*Server, error) {
+	hookExecutorBuilder := HookExecutorBuilder{}
+	if config.SlackToken != "" {
+		slackClient, err := slack.NewClient(config.SlackToken)
+		if err != nil {
+			return nil, errors.Wrap(err, "initializing slack client")
+		}
+		hookExecutorBuilder.Slack = slackClient
+	}
+
+	applyExecutorRegexToHook := make(map[string]events.HookExecutor)
+	for _, webhook := range config.Webhooks {
+		hookExecutor, err := hookExecutorBuilder.build(webhook)
+		if err != nil {
+			// TODO: check if it was because of uninitialized slack client
+			return nil, err
+		}
+
+		switch event := webhook.Event; event {
+		case "apply":
+			applyExecutorRegexToHook[webhook.WorkspaceRegex] = hookExecutor
+		default:
+			return nil, fmt.Errorf("%q webhook event not supported", event)
+		}
+	}
+
 	githubClient, err := github.NewClient(config.GithubHostname, config.GithubUser, config.GithubToken)
 	if err != nil {
 		return nil, err
 	}
 	githubStatus := &events.GithubStatus{Client: githubClient}
-	// nil slackClient unless token and channel was specified
-	var slackClient slack.Client
-	if config.SlackToken != "" && config.SlackChannel != "" {
-		slackClient, err = slack.NewClient(config.SlackToken, config.SlackChannel)
-		if err != nil {
-			return nil, errors.Wrap(err, "initializing slack client")
-		}
-	}
 	terraformClient, err := terraform.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing terraform")
@@ -97,7 +142,7 @@ func NewServer(config Config) (*Server, error) {
 	}
 	applyExecutor := &events.ApplyExecutor{
 		Github:            githubClient,
-		Slack:             slackClient,
+		WSRegexToHook:     applyExecutorRegexToHook,
 		Terraform:         terraformClient,
 		RequireApproval:   config.RequireApproval,
 		Run:               run,
