@@ -3,7 +3,6 @@ package events
 import (
 	"fmt"
 	"os"
-	"regexp"
 
 	"github.com/pkg/errors"
 
@@ -13,16 +12,17 @@ import (
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/run"
 	"github.com/hootsuite/atlantis/server/events/terraform"
+	"github.com/hootsuite/atlantis/server/events/webhooks"
 )
 
 type ApplyExecutor struct {
 	Github            github.Client
 	Terraform         *terraform.Client
-	WSRegexToHook     map[string]HookExecutor
 	RequireApproval   bool
 	Run               *run.Run
 	Workspace         Workspace
 	ProjectPreExecute *ProjectPreExecute
+	Webhooks          webhooks.WebhooksSender
 }
 
 func (a *ApplyExecutor) Execute(ctx *CommandContext) CommandResponse {
@@ -95,17 +95,14 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	tfApplyCmd := append(append(append([]string{"apply", "-no-color"}, applyExtraArgs...), ctx.Command.Flags...), plan.LocalPath)
 	output, err := a.Terraform.RunCommandWithVersion(ctx.Log, absolutePath, tfApplyCmd, terraformVersion, env)
 
-	// execute apply webhooks
-	for workspaceRegex, hookExecutor := range a.WSRegexToHook {
-		matched, err := regexp.MatchString(workspaceRegex, ctx.Command.Environment)
-		if err != nil {
-			// log the regexp error but let's continue with the apply
-			ctx.Log.Debug(err.Error())
-		}
-		if matched {
-			hookExecutor.ExecuteHook(ctx)
-		}
-	}
+	// Send webhooks.
+	a.Webhooks.Send(ctx.Log, webhooks.ApplyResult{
+		Environment: env,
+		User:        ctx.User,
+		Repo:        ctx.BaseRepo,
+		Pull:        ctx.Pull,
+		Success:     err == nil,
+	})
 
 	if err != nil {
 		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
