@@ -1,5 +1,5 @@
-
 package main
+
 
 import (
 	"github.com/hootsuite/atlantis/cmd"
