@@ -20,7 +20,22 @@ func NewSlack(r *regexp.Regexp, channel string, token string) (*SlackWebhook, er
 	if _, err := slackClient.AuthTest(); err != nil {
 		return nil, errors.Wrap(err, "testing slack authentication")
 	}
-	// todo: test channel exists
+
+	// Make sure the slack channel exists.
+	channels, err := slackClient.GetChannels(true)
+	if err != nil {
+		return nil, err
+	}
+	channelExist := false
+	for _, c := range channels {
+		if c.Name == channel {
+			channelExist = true
+			break
+		}
+	}
+	if !channelExist {
+		return nil, errors.Errorf("slack channel %q doesn't exist", channel)
+	}
 
 	return &SlackWebhook{
 		Client:   slackClient,
