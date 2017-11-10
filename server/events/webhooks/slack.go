@@ -51,24 +51,38 @@ func (s *SlackWebhook) Send(result ApplyResult) error {
 	}
 
 	params := slack.NewPostMessageParameters()
+	params.Attachments = s.createAttachments(result)
 	params.AsUser = true
 	params.EscapeText = false
-	text := s.createMessage(result)
-	_, _, err := s.Client.PostMessage(s.Channel, text, params)
+	_, _, err := s.Client.PostMessage(s.Channel, "", params)
 	return err
 }
 
-func (s *SlackWebhook) createMessage(result ApplyResult) string {
-	var status string
+func (s *SlackWebhook) createAttachments(result ApplyResult) []slack.Attachment {
+	var color string
 	if result.Success {
-		status = ":white_check_mark:"
+		color = "good"
 	} else {
-		status = ":x:"
+		color = "danger"
 	}
-	return fmt.Sprintf("%s *%s* %s in <%s|%s>.",
-		status,
-		result.User.Username,
-		"apply",
-		result.Pull.URL,
-		result.Repo.FullName)
+
+	text := fmt.Sprintf("Applied in <%s|%s>.", result.Pull.URL, result.Repo.FullName)
+	attachment := slack.Attachment{
+		Color: color,
+		Text:  text,
+		Fields: []slack.AttachmentField{
+			slack.AttachmentField{
+				Title: "Environment",
+				Value: result.Environment,
+				Short: true,
+			},
+			slack.AttachmentField{
+				Title: "User",
+				Value: result.User.Username,
+				Short: true,
+			},
+		},
+	}
+	var attachments []slack.Attachment
+	return append(attachments, attachment)
 }
