@@ -102,7 +102,7 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 // 2. "terraform workspace or env select" - This selects the workspace or environment for the terraform project
 // [optional] 3. "terraform workspace or env new" - This creates a new workspace or environment for the terraform project
 // env is the environment supplied by the atlantis user that is used to
-// select or create a new workspace or environment for terraform
+// select or create a new workspace or environment for terraform.
 func (c *Client) RunInitAndWorkspace(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, v *version.Version) ([]string, error) {
 	var outputs []string
 	// run terraform init
@@ -120,7 +120,6 @@ func (c *Client) RunInitAndWorkspace(log *logging.SimpleLogger, path string, env
 		workspaceCmdName = "env"
 	}
 
-	// Run 'terraform workspace/env select'
 	output, err = c.RunCommandWithVersion(log, path, []string{workspaceCmdName, "select", "-no-color", env}, v, env)
 	outputs = append(outputs, output)
 	if err != nil {
