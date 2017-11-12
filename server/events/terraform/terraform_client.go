@@ -72,7 +72,7 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 	// this is to support scripts to use the ENVIRONMENT, ATLANTIS_TERRAFORM_VERSION
 	// and WORKSPACE variables in their scripts
 	// append current process's environment variables
-	// this is to prevent the $PATH variable being removed from the environment
+	// this is to prevent the $PATH variable being removed from the environment.
 	envVars := []string{
 		fmt.Sprintf("ENVIRONMENT=%s", env),
 		fmt.Sprintf("ATLANTIS_TERRAFORM_VERSION=%s", v.String()),
@@ -113,7 +113,7 @@ func (c *Client) RunInitAndWorkspace(log *logging.SimpleLogger, path string, env
 	}
 
 	// Terraform uses 'terraform env' command for versions > 0.8 and < 0.10.
-	// Versions >= 0.10 use 'terraform workspace'
+	// Versions >= 0.10 use 'terraform workspace'.
 	workspaceCmdName := "workspace"
 	constraints, _ := version.NewConstraint("< 0.10.0")
 	if constraints.Check(v) {
