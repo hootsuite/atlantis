@@ -20,9 +20,11 @@ import (
 	"github.com/hootsuite/atlantis/server/events/terraform"
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/static"
+	"github.com/hootsuite/atlantis/server/vcs"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
+	"github.com/xanzy/go-gitlab"
 )
 
 const LockRouteName = "lock-detail"
@@ -50,17 +52,40 @@ type Config struct {
 	GithubToken         string `mapstructure:"gh-token"`
 	GithubUser          string `mapstructure:"gh-user"`
 	GithubWebHookSecret string `mapstructure:"gh-webhook-secret"`
+	GitlabHostname      string `mapstructure:"gitlab-hostname"`
+	GitlabToken         string `mapstructure:"gitlab-token"`
+	GitlabUser          string `mapstructure:"gitlab-user"`
+	GitlabWebHookSecret string `mapstructure:"gitlab-webhook-secret"`
 	LogLevel            string `mapstructure:"log-level"`
 	Port                int    `mapstructure:"port"`
 	RequireApproval     bool   `mapstructure:"require-approval"`
 }
 
 func NewServer(config Config) (*Server, error) {
-	githubClient, err := github.NewClient(config.GithubHostname, config.GithubUser, config.GithubToken)
-	if err != nil {
-		return nil, err
+	var supportsVCSHosts []vcs.Host
+	var githubClient *github.GithubClient
+	var gitlabClient *github.GitlabClient
+	if config.GithubUser != "" {
+		supportsVCSHosts = append(supportsVCSHosts, vcs.Github)
+		var err error
+		githubClient, err = github.NewClient(config.GithubHostname, config.GithubUser, config.GithubToken)
+		if err != nil {
+			return nil, err
+		}
 	}
-	githubStatus := &events.GithubStatus{Client: githubClient}
+	if config.GitlabUser != "" {
+		supportsVCSHosts = append(supportsVCSHosts, vcs.Gitlab)
+		gitlabClient = &github.GitlabClient{
+			Client: gitlab.NewClient(nil, config.GitlabToken),
+		}
+	}
+	// If GitHub or GitLab wasn't configured then the clients will be nil
+	// but this is okay because we reject calls from unsupported vcs hosts.
+	vcsClient := &github.VCSClientRouter{
+		GithubClient: githubClient,
+		GitlabClient: gitlabClient,
+	}
+	githubStatus := &events.CommitStatusUpdater{Client: vcsClient}
 	terraformClient, err := terraform.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing terraform")
@@ -84,7 +109,7 @@ func NewServer(config Config) (*Server, error) {
 		Terraform:    terraformClient,
 	}
 	applyExecutor := &events.ApplyExecutor{
-		Github:            githubClient,
+		VCSClient:         vcsClient,
 		Terraform:         terraformClient,
 		RequireApproval:   config.RequireApproval,
 		Run:               run,
@@ -92,7 +117,7 @@ func NewServer(config Config) (*Server, error) {
 		ProjectPreExecute: projectPreExecute,
 	}
 	planExecutor := &events.PlanExecutor{
-		Github:            githubClient,
+		VCSClient:         vcsClient,
 		Terraform:         terraformClient,
 		Run:               run,
 		Workspace:         workspace,
@@ -102,7 +127,7 @@ func NewServer(config Config) (*Server, error) {
 	}
 	helpExecutor := &events.HelpExecutor{}
 	pullClosedExecutor := &events.PullClosedExecutor{
-		Github:    githubClient,
+		VCSClient: vcsClient,
 		Locker:    lockingClient,
 		Workspace: workspace,
 	}
@@ -110,6 +135,8 @@ func NewServer(config Config) (*Server, error) {
 	eventParser := &events.EventParser{
 		GithubUser:  config.GithubUser,
 		GithubToken: config.GithubToken,
+		GitlabUser:  config.GitlabUser,
+		GitlabToken: config.GitlabToken,
 	}
 	commandHandler := &events.CommandHandler{
 		ApplyExecutor:     applyExecutor,
@@ -117,7 +144,9 @@ func NewServer(config Config) (*Server, error) {
 		HelpExecutor:      helpExecutor,
 		LockURLGenerator:  planExecutor,
 		EventParser:       eventParser,
-		GHClient:          githubClient,
+		VCSClient:         vcsClient,
+		GithubClient:      githubClient,
+		GitlabClient:      gitlabClient,
 		GHStatus:          githubStatus,
 		EnvLocker:         concurrentRunLocker,
 		GHCommentRenderer: githubComments,
@@ -129,7 +158,8 @@ func NewServer(config Config) (*Server, error) {
 		Parser:              eventParser,
 		Logger:              logger,
 		GithubWebHookSecret: []byte(config.GithubWebHookSecret),
-		Validator:           &GHRequestValidation{},
+		GHValidator:         &GHRequestValidation{},
+		SupportedVCSHosts:   supportsVCSHosts,
 	}
 	router := mux.NewRouter()
 	return &Server{

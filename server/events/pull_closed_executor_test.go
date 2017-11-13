@@ -51,7 +51,7 @@ func TestCleanUpPullNoLocks(t *testing.T) {
 	gh := ghmocks.NewMockClient()
 	pce := events.PullClosedExecutor{
 		Locker:    l,
-		Github:    gh,
+		VCSClient: gh,
 		Workspace: w,
 	}
 	When(l.UnlockByPull(fixtures.Repo.FullName, fixtures.Pull.Num)).ThenReturn(nil, nil)
@@ -131,7 +131,7 @@ func TestCleanUpPullComments(t *testing.T) {
 		l := lockmocks.NewMockLocker()
 		pce := events.PullClosedExecutor{
 			Locker:    l,
-			Github:    gh,
+			VCSClient: gh,
 			Workspace: w,
 		}
 		t.Log("testing: " + c.Description)

@@ -28,7 +28,7 @@ const atlantisUserTFVar = "atlantis_user"
 // PlanExecutor handles everything related to running terraform plan
 // including integration with S3, Terraform, and GitHub
 type PlanExecutor struct {
-	Github            github.Client
+	VCSClient         github.VCSClientRouting
 	Terraform         terraform.Runner
 	Locker            locking.Locker
 	LockURL           func(id string) (url string)
@@ -49,7 +49,7 @@ func (p *PlanExecutor) SetLockURL(f func(id string) (url string)) {
 
 func (p *PlanExecutor) Execute(ctx *CommandContext) CommandResponse {
 	// figure out what projects have been modified so we know where to run plan
-	modifiedFiles, err := p.Github.GetModifiedFiles(ctx.BaseRepo, ctx.Pull)
+	modifiedFiles, err := p.VCSClient.GetModifiedFiles(ctx.BaseRepo, ctx.Pull, ctx.VCSHost)
 	if err != nil {
 		return CommandResponse{Error: errors.Wrap(err, "getting modified files")}
 	}

@@ -1,6 +1,8 @@
 // Package github provides convenience wrappers around the go-github package.
 package github
 
+// todo: rename package to vcs
+
 import (
 	"context"
 
@@ -10,27 +12,75 @@ import (
 
 	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/server/events/models"
+	"github.com/hootsuite/atlantis/server/vcs"
 	"github.com/pkg/errors"
+	"github.com/xanzy/go-gitlab"
 )
 
-//go:generate pegomock generate --package mocks -o mocks/mock_client.go client.go
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_vcs_client.go VCSClientRouting
 
-type Client interface {
-	GetModifiedFiles(repo models.Repo, pull models.PullRequest) ([]string, error)
-	CreateComment(repo models.Repo, pull models.PullRequest, comment string) error
-	PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error)
-	GetPullRequest(repo models.Repo, num int) (*github.PullRequest, *github.Response, error)
-	UpdateStatus(repo models.Repo, pull models.PullRequest, state string, description string, context string) error
+type VCSClientRouting interface {
+	GetModifiedFiles(repo models.Repo, pull models.PullRequest, host vcs.Host) ([]string, error)
+	CreateComment(repo models.Repo, pull models.PullRequest, comment string, host vcs.Host) error
+	PullIsApproved(repo models.Repo, pull models.PullRequest, host vcs.Host) (bool, error)
+	UpdateStatus(repo models.Repo, pull models.PullRequest, state vcs.CommitStatus, description string, host vcs.Host) error
 }
 
-// ConcreteClient is used to perform GitHub actions.
-type ConcreteClient struct {
+type VCSClientRouter struct {
+	GithubClient *GithubClient
+	GitlabClient *GitlabClient
+}
+
+var invalidVCSErr = errors.New("Invalid VCS Host. This is a bug!")
+
+func (v *VCSClientRouter) GetModifiedFiles(repo models.Repo, pull models.PullRequest, host vcs.Host) ([]string, error) {
+	switch host {
+	case vcs.Github:
+		return v.GithubClient.GetModifiedFiles(repo, pull)
+	case vcs.Gitlab:
+		return v.GitlabClient.GetModifiedFiles(repo, pull)
+	}
+	return nil, invalidVCSErr
+}
+
+func (v *VCSClientRouter) CreateComment(repo models.Repo, pull models.PullRequest, comment string, host vcs.Host) error {
+	switch host {
+	case vcs.Github:
+		return v.GithubClient.CreateComment(repo, pull, comment)
+	case vcs.Gitlab:
+		return v.GitlabClient.CreateComment(repo, pull, comment)
+	}
+	return invalidVCSErr
+}
+
+func (v *VCSClientRouter) PullIsApproved(repo models.Repo, pull models.PullRequest, host vcs.Host) (bool, error) {
+	switch host {
+	case vcs.Github:
+		return v.GithubClient.PullIsApproved(repo, pull)
+	case vcs.Gitlab:
+		return v.GitlabClient.PullIsApproved(repo, pull)
+	}
+	return false, invalidVCSErr
+}
+
+func (v *VCSClientRouter) UpdateStatus(repo models.Repo, pull models.PullRequest, state vcs.CommitStatus, description string, host vcs.Host) error {
+	switch host {
+	case vcs.Github:
+		return v.GithubClient.UpdateStatus(repo, pull, state, description)
+	case vcs.Gitlab:
+		return v.GitlabClient.UpdateStatus(repo, pull, state, description)
+	}
+	return invalidVCSErr
+}
+
+// GithubClient is used to perform GitHub actions.
+type GithubClient struct {
 	client *github.Client
 	ctx    context.Context
 }
 
 // NewClient returns a valid GitHub client.
-func NewClient(hostname string, user string, pass string) (*ConcreteClient, error) {
+func NewClient(hostname string, user string, pass string) (*GithubClient, error) {
 	tp := github.BasicAuthTransport{
 		Username: strings.TrimSpace(user),
 		Password: strings.TrimSpace(pass),
@@ -48,7 +98,7 @@ func NewClient(hostname string, user string, pass string) (*ConcreteClient, erro
 		client.BaseURL = base
 	}
 
-	return &ConcreteClient{
+	return &GithubClient{
 		client: client,
 		ctx:    context.Background(),
 	}, nil
@@ -56,7 +106,7 @@ func NewClient(hostname string, user string, pass string) (*ConcreteClient, erro
 
 // GetModifiedFiles returns the names of files that were modified in the pull request.
 // The names include the path to the file from the repo root, ex. parent/child/file.txt.
-func (c *ConcreteClient) GetModifiedFiles(repo models.Repo, pull models.PullRequest) ([]string, error) {
+func (g *GithubClient) GetModifiedFiles(repo models.Repo, pull models.PullRequest) ([]string, error) {
 	var files []string
 	nextPage := 0
 	for {
@@ -66,7 +116,7 @@ func (c *ConcreteClient) GetModifiedFiles(repo models.Repo, pull models.PullRequ
 		if nextPage != 0 {
 			opts.Page = nextPage
 		}
-		pageFiles, resp, err := c.client.PullRequests.ListFiles(c.ctx, repo.Owner, repo.Name, pull.Num, &opts)
+		pageFiles, resp, err := g.client.PullRequests.ListFiles(g.ctx, repo.Owner, repo.Name, pull.Num, &opts)
 		if err != nil {
 			return files, err
 		}
@@ -82,14 +132,14 @@ func (c *ConcreteClient) GetModifiedFiles(repo models.Repo, pull models.PullRequ
 }
 
 // CreateComment creates a comment on the pull request.
-func (c *ConcreteClient) CreateComment(repo models.Repo, pull models.PullRequest, comment string) error {
-	_, _, err := c.client.Issues.CreateComment(c.ctx, repo.Owner, repo.Name, pull.Num, &github.IssueComment{Body: &comment})
+func (g *GithubClient) CreateComment(repo models.Repo, pull models.PullRequest, comment string) error {
+	_, _, err := g.client.Issues.CreateComment(g.ctx, repo.Owner, repo.Name, pull.Num, &github.IssueComment{Body: &comment})
 	return err
 }
 
 // PullIsApproved returns true if the pull request was approved.
-func (c *ConcreteClient) PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error) {
-	reviews, _, err := c.client.PullRequests.ListReviews(c.ctx, repo.Owner, repo.Name, pull.Num, nil)
+func (g *GithubClient) PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error) {
+	reviews, _, err := g.client.PullRequests.ListReviews(g.ctx, repo.Owner, repo.Name, pull.Num, nil)
 	if err != nil {
 		return false, errors.Wrap(err, "getting reviews")
 	}
@@ -102,17 +152,105 @@ func (c *ConcreteClient) PullIsApproved(repo models.Repo, pull models.PullReques
 }
 
 // GetPullRequest returns the pull request.
-func (c *ConcreteClient) GetPullRequest(repo models.Repo, num int) (*github.PullRequest, *github.Response, error) {
-	return c.client.PullRequests.Get(c.ctx, repo.Owner, repo.Name, num)
+func (g *GithubClient) GetPullRequest(repo models.Repo, num int) (*github.PullRequest, *github.Response, error) {
+	return g.client.PullRequests.Get(g.ctx, repo.Owner, repo.Name, num)
 }
 
 // UpdateStatus updates the status badge on the pull request.
 // See https://github.com/blog/1227-commit-status-api.
-func (c *ConcreteClient) UpdateStatus(repo models.Repo, pull models.PullRequest, state string, description string, context string) error {
+func (g *GithubClient) UpdateStatus(repo models.Repo, pull models.PullRequest, state vcs.CommitStatus, description string) error {
+	const statusContext = "Atlantis"
+	ghState := "error"
+	switch state {
+	case vcs.Pending:
+		ghState = "pending"
+	case vcs.Success:
+		ghState = "success"
+	case vcs.Failed:
+		ghState = "failure"
+	}
 	status := &github.RepoStatus{
-		State:       github.String(state),
+		State:       github.String(ghState),
 		Description: github.String(description),
-		Context:     github.String(context)}
-	_, _, err := c.client.Repositories.CreateStatus(c.ctx, repo.Owner, repo.Name, pull.HeadCommit, status)
+		Context:     github.String(statusContext)}
+	_, _, err := g.client.Repositories.CreateStatus(g.ctx, repo.Owner, repo.Name, pull.HeadCommit, status)
+	return err
+}
+
+type GitlabClient struct {
+	Client *gitlab.Client
+}
+
+// GetModifiedFiles returns the names of files that were modified in the merge request.
+// The names include the path to the file from the repo root, ex. parent/child/file.txt.
+func (g *GitlabClient) GetModifiedFiles(repo models.Repo, pull models.PullRequest) ([]string, error) {
+	const maxPerPage = 100
+	var files []string
+	nextPage := 1
+	// Constructing the api url by hand so we can do pagination.
+	apiURL := fmt.Sprintf("projects/%s/merge_requests/%d/changes", url.QueryEscape(repo.FullName), pull.Num)
+	for {
+		opts := gitlab.ListOptions{
+			Page:    nextPage,
+			PerPage: maxPerPage,
+		}
+		req, err := g.Client.NewRequest("GET", apiURL, opts, nil)
+		if err != nil {
+			return nil, err
+		}
+		mr := new(gitlab.MergeRequest)
+		resp, err := g.Client.Do(req, mr)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, f := range mr.Changes {
+			files = append(files, f.NewPath)
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		nextPage = resp.NextPage
+	}
+
+	return files, nil
+}
+
+// CreateComment creates a comment on the merge request.
+func (g *GitlabClient) CreateComment(repo models.Repo, pull models.PullRequest, comment string) error {
+	_, _, err := g.Client.Notes.CreateMergeRequestNote(repo.FullName, pull.Num, &gitlab.CreateMergeRequestNoteOptions{Body: gitlab.String(comment)})
+	return err
+}
+
+// PullIsApproved returns true if the merge request was approved.
+func (g *GitlabClient) PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error) {
+	approvals, _, err := g.Client.MergeRequests.GetMergeRequestApprovals(repo.FullName, pull.Num)
+	if err != nil {
+		return false, err
+	}
+	if approvals.ApprovalsMissing > 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+// UpdateStatus updates the build status of a commit.
+func (g *GitlabClient) UpdateStatus(repo models.Repo, pull models.PullRequest, state vcs.CommitStatus, description string) error {
+	const statusContext = "Atlantis"
+
+	gitlabState := gitlab.Failed
+	switch state {
+	case vcs.Pending:
+		gitlabState = gitlab.Pending
+	case vcs.Failed:
+		gitlabState = gitlab.Failed
+	case vcs.Success:
+		gitlabState = gitlab.Success
+	}
+	_, _, err := g.Client.Commits.SetCommitStatus(repo.FullName, pull.HeadCommit, &gitlab.SetCommitStatusOptions{
+		State:       gitlabState,
+		Context:     gitlab.String(statusContext),
+		Description: gitlab.String(description),
+	})
 	return err
 }

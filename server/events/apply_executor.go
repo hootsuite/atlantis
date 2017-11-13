@@ -15,7 +15,7 @@ import (
 )
 
 type ApplyExecutor struct {
-	Github            github.Client
+	VCSClient         github.VCSClientRouting
 	Terraform         *terraform.Client
 	RequireApproval   bool
 	Run               *run.Run
@@ -25,7 +25,7 @@ type ApplyExecutor struct {
 
 func (a *ApplyExecutor) Execute(ctx *CommandContext) CommandResponse {
 	if a.RequireApproval {
-		approved, err := a.Github.PullIsApproved(ctx.BaseRepo, ctx.Pull)
+		approved, err := a.VCSClient.PullIsApproved(ctx.BaseRepo, ctx.Pull, ctx.VCSHost)
 		if err != nil {
 			return CommandResponse{Error: errors.Wrap(err, "checking if pull request was approved")}
 		}

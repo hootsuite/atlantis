@@ -243,7 +243,6 @@ func TestExtractPullData(t *testing.T) {
 	PullRes, repoRes, err := parser.ExtractPullData(&Pull)
 	Ok(t, err)
 	Equals(t, models.PullRequest{
-		BaseCommit: Pull.Base.GetSHA(),
 		URL:        Pull.GetHTMLURL(),
 		Author:     Pull.User.GetLogin(),
 		Branch:     Pull.Head.GetRef(),

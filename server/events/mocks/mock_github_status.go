@@ -4,10 +4,11 @@
 package mocks
 
 import (
+	"reflect"
+
 	events "github.com/hootsuite/atlantis/server/events"
 	models "github.com/hootsuite/atlantis/server/events/models"
 	pegomock "github.com/petergtz/pegomock"
-	"reflect"
 )
 
 type MockGHStatusUpdater struct {

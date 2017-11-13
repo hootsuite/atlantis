@@ -4,11 +4,12 @@
 package mocks
 
 import (
+	"reflect"
+
 	github "github.com/google/go-github/github"
 	events "github.com/hootsuite/atlantis/server/events"
 	models "github.com/hootsuite/atlantis/server/events/models"
 	pegomock "github.com/petergtz/pegomock"
-	"reflect"
 )
 
 type MockEventParsing struct {
@@ -37,7 +38,7 @@ func (mock *MockEventParsing) DetermineCommand(comment *github.IssueCommentEvent
 
 func (mock *MockEventParsing) ExtractCommentData(comment *github.IssueCommentEvent) (models.Repo, models.User, models.PullRequest, error) {
 	params := []pegomock.Param{comment}
-	result := pegomock.GetGenericMockFrom(mock).Invoke("ExtractCommentData", params, []reflect.Type{reflect.TypeOf((*models.Repo)(nil)).Elem(), reflect.TypeOf((*models.User)(nil)).Elem(), reflect.TypeOf((*models.PullRequest)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
+	result := pegomock.GetGenericMockFrom(mock).Invoke("ParseGithubIssueCommentEvent", params, []reflect.Type{reflect.TypeOf((*models.Repo)(nil)).Elem(), reflect.TypeOf((*models.User)(nil)).Elem(), reflect.TypeOf((*models.PullRequest)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
 	var ret0 models.Repo
 	var ret1 models.User
 	var ret2 models.PullRequest
@@ -61,7 +62,7 @@ func (mock *MockEventParsing) ExtractCommentData(comment *github.IssueCommentEve
 
 func (mock *MockEventParsing) ExtractPullData(pull *github.PullRequest) (models.PullRequest, models.Repo, error) {
 	params := []pegomock.Param{pull}
-	result := pegomock.GetGenericMockFrom(mock).Invoke("ExtractPullData", params, []reflect.Type{reflect.TypeOf((*models.PullRequest)(nil)).Elem(), reflect.TypeOf((*models.Repo)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
+	result := pegomock.GetGenericMockFrom(mock).Invoke("ParseGithubPull", params, []reflect.Type{reflect.TypeOf((*models.PullRequest)(nil)).Elem(), reflect.TypeOf((*models.Repo)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
 	var ret0 models.PullRequest
 	var ret1 models.Repo
 	var ret2 error
@@ -81,7 +82,7 @@ func (mock *MockEventParsing) ExtractPullData(pull *github.PullRequest) (models.
 
 func (mock *MockEventParsing) ExtractRepoData(ghRepo *github.Repository) (models.Repo, error) {
 	params := []pegomock.Param{ghRepo}
-	result := pegomock.GetGenericMockFrom(mock).Invoke("ExtractRepoData", params, []reflect.Type{reflect.TypeOf((*models.Repo)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
+	result := pegomock.GetGenericMockFrom(mock).Invoke("ParseGithubRepo", params, []reflect.Type{reflect.TypeOf((*models.Repo)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
 	var ret0 models.Repo
 	var ret1 error
 	if len(result) != 0 {
@@ -142,7 +143,7 @@ func (c *EventParsing_DetermineCommand_OngoingVerification) GetAllCapturedArgume
 
 func (verifier *VerifierEventParsing) ExtractCommentData(comment *github.IssueCommentEvent) *EventParsing_ExtractCommentData_OngoingVerification {
 	params := []pegomock.Param{comment}
-	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ExtractCommentData", params)
+	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ParseGithubIssueCommentEvent", params)
 	return &EventParsing_ExtractCommentData_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
@@ -169,7 +170,7 @@ func (c *EventParsing_ExtractCommentData_OngoingVerification) GetAllCapturedArgu
 
 func (verifier *VerifierEventParsing) ExtractPullData(pull *github.PullRequest) *EventParsing_ExtractPullData_OngoingVerification {
 	params := []pegomock.Param{pull}
-	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ExtractPullData", params)
+	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ParseGithubPull", params)
 	return &EventParsing_ExtractPullData_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
@@ -196,7 +197,7 @@ func (c *EventParsing_ExtractPullData_OngoingVerification) GetAllCapturedArgumen
 
 func (verifier *VerifierEventParsing) ExtractRepoData(ghRepo *github.Repository) *EventParsing_ExtractRepoData_OngoingVerification {
 	params := []pegomock.Param{ghRepo}
-	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ExtractRepoData", params)
+	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ParseGithubRepo", params)
 	return &EventParsing_ExtractRepoData_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 

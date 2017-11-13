@@ -3,6 +3,7 @@ package events
 import (
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/logging"
+	"github.com/hootsuite/atlantis/server/vcs"
 )
 
 type CommandContext struct {
@@ -12,4 +13,5 @@ type CommandContext struct {
 	User     models.User
 	Command  *Command
 	Log      *logging.SimpleLogger
+	VCSHost  vcs.Host
 }

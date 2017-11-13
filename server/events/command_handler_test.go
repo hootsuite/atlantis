@@ -42,7 +42,7 @@ func setup(t *testing.T) {
 		PlanExecutor:      planner,
 		ApplyExecutor:     applier,
 		HelpExecutor:      helper,
-		GHClient:          ghClient,
+		VCSClient:         ghClient,
 		GHStatus:          ghStatus,
 		EventParser:       eventParsing,
 		EnvLocker:         envLocker,

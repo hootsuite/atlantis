@@ -32,9 +32,6 @@ type PullRequest struct {
 	// HeadCommit points to the head of the branch that is being
 	// pull requested into the base.
 	HeadCommit string
-	// BaseCommit points to the head of the branch that this
-	// pull request will be merged into.
-	BaseCommit string
 	// URL is the url of the pull request.
 	// ex. "https://github.com/hootsuite/atlantis/pull/1"
 	URL string
@@ -42,7 +39,18 @@ type PullRequest struct {
 	Branch string
 	// Author is the GitHub username of the pull request author.
 	Author string
+	// State will be one of Open or Closed.
+	// Gitlab supports an additional "merged" state but Github doesn't so we map
+	// merged to Closed.
+	State PullRequestState
 }
+
+type PullRequestState int
+
+const (
+	Open PullRequestState = iota
+	Closed
+)
 
 // User is a GitHub user.
 type User struct {

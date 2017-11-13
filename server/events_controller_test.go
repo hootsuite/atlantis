@@ -186,7 +186,7 @@ func setup(t *testing.T) (server.EventsController, *mocks.MockGHRequestValidator
 	c := emocks.NewMockPullCleaner()
 	e := server.EventsController{
 		Logger:              logging.NewNoopLogger(),
-		Validator:           v,
+		GHValidator:         v,
 		Parser:              p,
 		CommandRunner:       cr,
 		PullCleaner:         c,
