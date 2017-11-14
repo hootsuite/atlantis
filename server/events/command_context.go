@@ -2,8 +2,8 @@ package events
 
 import (
 	"github.com/hootsuite/atlantis/server/events/models"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/logging"
-	"github.com/hootsuite/atlantis/server/vcs"
 )
 
 type CommandContext struct {

@@ -8,14 +8,14 @@ import (
 
 	"path/filepath"
 
-	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/run"
 	"github.com/hootsuite/atlantis/server/events/terraform"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 )
 
 type ApplyExecutor struct {
-	VCSClient         github.VCSClientRouting
+	VCSClient         vcs.ClientProxy
 	Terraform         *terraform.Client
 	RequireApproval   bool
 	Run               *run.Run

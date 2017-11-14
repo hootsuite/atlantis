@@ -5,11 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/locking"
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/run"
 	"github.com/hootsuite/atlantis/server/events/terraform"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/pkg/errors"
 )
 
@@ -28,7 +28,7 @@ const atlantisUserTFVar = "atlantis_user"
 // PlanExecutor handles everything related to running terraform plan
 // including integration with S3, Terraform, and GitHub
 type PlanExecutor struct {
-	VCSClient         github.VCSClientRouting
+	VCSClient         vcs.ClientProxy
 	Terraform         terraform.Runner
 	Locker            locking.Locker
 	LockURL           func(id string) (url string)

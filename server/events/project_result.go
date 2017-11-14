@@ -1,6 +1,6 @@
 package events
 
-import "github.com/hootsuite/atlantis/server/vcs"
+import "github.com/hootsuite/atlantis/server/events/vcs"
 
 type ProjectResult struct {
 	Path         string

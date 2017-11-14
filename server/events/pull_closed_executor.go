@@ -8,10 +8,9 @@ import (
 
 	"sort"
 
-	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/locking"
 	"github.com/hootsuite/atlantis/server/events/models"
-	"github.com/hootsuite/atlantis/server/vcs"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/pkg/errors"
 )
 
@@ -23,7 +22,7 @@ type PullCleaner interface {
 
 type PullClosedExecutor struct {
 	Locker    locking.Locker
-	VCSClient github.VCSClientRouting
+	VCSClient vcs.ClientProxy
 	Workspace Workspace
 }
 

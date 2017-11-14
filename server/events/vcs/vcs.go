@@ -7,6 +7,16 @@ const (
 	Gitlab
 )
 
+func (h Host) String() string {
+	switch h {
+	case Github:
+		return "Github"
+	case Gitlab:
+		return "Gitlab"
+	}
+	return "<missing String() implementation>"
+}
+
 // CommitStatus is the result of executing an Atlantis command for the commit.
 // In Github the options are: error, failure, pending, success.
 // In Gitlab the options are: failed, canceled, pending, running, success.

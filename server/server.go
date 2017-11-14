@@ -13,14 +13,13 @@ import (
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 	"github.com/hootsuite/atlantis/server/events"
-	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/locking"
 	"github.com/hootsuite/atlantis/server/events/locking/boltdb"
 	"github.com/hootsuite/atlantis/server/events/run"
 	"github.com/hootsuite/atlantis/server/events/terraform"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/static"
-	"github.com/hootsuite/atlantis/server/vcs"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
@@ -62,29 +61,24 @@ type Config struct {
 }
 
 func NewServer(config Config) (*Server, error) {
-	var supportsVCSHosts []vcs.Host
-	var githubClient *github.GithubClient
-	var gitlabClient *github.GitlabClient
+	var supportedVCSHosts []vcs.Host
+	var githubClient *vcs.GithubClient
+	var gitlabClient *vcs.GitlabClient
 	if config.GithubUser != "" {
-		supportsVCSHosts = append(supportsVCSHosts, vcs.Github)
+		supportedVCSHosts = append(supportedVCSHosts, vcs.Github)
 		var err error
-		githubClient, err = github.NewClient(config.GithubHostname, config.GithubUser, config.GithubToken)
+		githubClient, err = vcs.NewGithubClient(config.GithubHostname, config.GithubUser, config.GithubToken)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if config.GitlabUser != "" {
-		supportsVCSHosts = append(supportsVCSHosts, vcs.Gitlab)
-		gitlabClient = &github.GitlabClient{
+		supportedVCSHosts = append(supportedVCSHosts, vcs.Gitlab)
+		gitlabClient = &vcs.GitlabClient{
 			Client: gitlab.NewClient(nil, config.GitlabToken),
 		}
 	}
-	// If GitHub or GitLab wasn't configured then the clients will be nil
-	// but this is okay because we reject calls from unsupported vcs hosts.
-	vcsClient := &github.VCSClientRouter{
-		GithubClient: githubClient,
-		GitlabClient: gitlabClient,
-	}
+	vcsClient := vcs.NewDefaultClientProxy(githubClient, gitlabClient)
 	githubStatus := &events.CommitStatusUpdater{Client: vcsClient}
 	terraformClient, err := terraform.NewClient()
 	if err != nil {
@@ -139,27 +133,29 @@ func NewServer(config Config) (*Server, error) {
 		GitlabToken: config.GitlabToken,
 	}
 	commandHandler := &events.CommandHandler{
-		ApplyExecutor:     applyExecutor,
-		PlanExecutor:      planExecutor,
-		HelpExecutor:      helpExecutor,
-		LockURLGenerator:  planExecutor,
-		EventParser:       eventParser,
-		VCSClient:         vcsClient,
-		GithubClient:      githubClient,
-		GitlabClient:      gitlabClient,
-		GHStatus:          githubStatus,
-		EnvLocker:         concurrentRunLocker,
-		GHCommentRenderer: githubComments,
-		Logger:            logger,
+		ApplyExecutor:            applyExecutor,
+		PlanExecutor:             planExecutor,
+		HelpExecutor:             helpExecutor,
+		LockURLGenerator:         planExecutor,
+		EventParser:              eventParser,
+		VCSClient:                vcsClient,
+		GithubPullGetter:         githubClient,
+		GitlabMergeRequestGetter: gitlabClient,
+		GHStatus:                 githubStatus,
+		EnvLocker:                concurrentRunLocker,
+		GHCommentRenderer:        githubComments,
+		Logger:                   logger,
 	}
 	eventsController := &EventsController{
-		CommandRunner:       commandHandler,
-		PullCleaner:         pullClosedExecutor,
-		Parser:              eventParser,
-		Logger:              logger,
-		GithubWebHookSecret: []byte(config.GithubWebHookSecret),
-		GHValidator:         &GHRequestValidation{},
-		SupportedVCSHosts:   supportsVCSHosts,
+		CommandRunner:          commandHandler,
+		PullCleaner:            pullClosedExecutor,
+		Parser:                 eventParser,
+		Logger:                 logger,
+		GithubWebHookSecret:    []byte(config.GithubWebHookSecret),
+		GithubRequestValidator: &DefaultGithubRequestValidator{},
+		GitlabRequestParser:    &DefaultGitlabRequestValidator{},
+		GitlabWebHookSecret:    []byte(config.GitlabWebHookSecret),
+		SupportedVCSHosts:      supportedVCSHosts,
 	}
 	router := mux.NewRouter()
 	return &Server{

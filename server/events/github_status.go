@@ -5,9 +5,8 @@ import (
 
 	"strings"
 
-	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/models"
-	"github.com/hootsuite/atlantis/server/vcs"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 )
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_github_status.go GHStatusUpdater
@@ -18,7 +17,7 @@ type GHStatusUpdater interface {
 }
 
 type CommitStatusUpdater struct {
-	Client github.VCSClientRouting
+	Client vcs.ClientProxy
 }
 
 func (g *CommitStatusUpdater) Update(repo models.Repo, pull models.PullRequest, status vcs.CommitStatus, cmd *Command, host vcs.Host) error {

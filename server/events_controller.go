@@ -4,14 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"encoding/json"
-	"io/ioutil"
-
 	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/server/events"
 	"github.com/hootsuite/atlantis/server/events/models"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/logging"
-	"github.com/hootsuite/atlantis/server/vcs"
 	"github.com/xanzy/go-gitlab"
 )
 
@@ -26,8 +23,13 @@ type EventsController struct {
 	// GithubWebHookSecret is the secret added to this webhook via the GitHub
 	// UI that identifies this call as coming from GitHub. If empty, no
 	// request validation is done.
-	GithubWebHookSecret []byte
-	GHValidator         GHRequestValidator
+	GithubWebHookSecret    []byte
+	GithubRequestValidator GithubRequestValidator
+	GitlabRequestParser    GitlabRequestParser
+	// GitlabWebHookSecret is the secret added to this webhook via the GitLab
+	// UI that identifies this call as coming from GitLab. If empty, no
+	// request validation is done.
+	GitlabWebHookSecret []byte
 	// SupportedVCSHosts is which VCS hosts Atlantis was configured upon
 	// startup to support.
 	SupportedVCSHosts []vcs.Host
@@ -63,41 +65,29 @@ func (e *EventsController) supportsHost(h vcs.Host) bool {
 }
 
 func (e *EventsController) handleGitlabPost(w http.ResponseWriter, r *http.Request) {
-	bytes, err := ioutil.ReadAll(r.Body)
+	bytes, err := e.GitlabRequestParser.Validate(r, e.GitlabWebHookSecret)
 	if err != nil {
 		e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	const mergeEventHeader = "Merge Request Hook"
-	const noteEventHeader = "Note Hook"
-
-	switch r.Header.Get(gitlabHeader) {
-	case mergeEventHeader:
-		var m gitlab.MergeEvent
-		if err := json.Unmarshal(bytes, &m); err != nil {
-			e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
-			return
-		}
-		e.HandleGitlabMergeRequestEvent(w, m)
-		return
-	case noteEventHeader:
-		var m gitlab.MergeCommentEvent
-		if err := json.Unmarshal(bytes, &m); err != nil {
-			e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
-			return
-		}
-		e.HandleGitlabCommentEvent(w, m)
-		return
+	event, err := e.GitlabRequestParser.Parse(r, bytes)
+	if err != nil {
+		e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
+	}
+	switch event := event.(type) {
+	case gitlab.MergeEvent:
+		e.HandleGitlabMergeRequestEvent(w, event)
+	case gitlab.MergeCommentEvent:
+		e.HandleGitlabCommentEvent(w, event)
 	default:
 		e.respond(w, logging.Debug, http.StatusOK, "Ignoring unsupported event")
-		return
 	}
+
 }
 
 func (e *EventsController) handleGithubPost(w http.ResponseWriter, r *http.Request) {
 	// Validate the request against the optional webhook secret.
-	payload, err := e.GHValidator.Validate(r, e.GithubWebHookSecret)
+	payload, err := e.GithubRequestValidator.Validate(r, e.GithubWebHookSecret)
 	if err != nil {
 		e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
 		return

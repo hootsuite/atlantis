@@ -10,10 +10,9 @@ import (
 
 	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/server/events"
-	gh "github.com/hootsuite/atlantis/server/events/github/fixtures"
-	ghmocks "github.com/hootsuite/atlantis/server/events/github/mocks"
 	"github.com/hootsuite/atlantis/server/events/mocks"
 	"github.com/hootsuite/atlantis/server/events/models/fixtures"
+	vcsmocks "github.com/hootsuite/atlantis/server/events/vcs/mocks"
 	"github.com/hootsuite/atlantis/server/logging"
 	. "github.com/hootsuite/atlantis/testing"
 	"github.com/mohae/deepcopy"
@@ -22,9 +21,9 @@ import (
 
 var applier *mocks.MockExecutor
 var helper *mocks.MockExecutor
-var planner *mocks.MockPlanner
+var planner *mocks.MockExecutor
 var eventParsing *mocks.MockEventParsing
-var ghClient *ghmocks.MockClient
+var vcsClient *vcsmocks.MockClientProxy
 var ghStatus *mocks.MockGHStatusUpdater
 var envLocker *mocks.MockEnvLocker
 var ch events.CommandHandler
@@ -33,16 +32,15 @@ func setup(t *testing.T) {
 	RegisterMockTestingT(t)
 	applier = mocks.NewMockExecutor()
 	helper = mocks.NewMockExecutor()
-	planner = mocks.NewMockPlanner()
+	planner = mocks.NewMockExecutor()
 	eventParsing = mocks.NewMockEventParsing()
-	ghClient = ghmocks.NewMockClient()
 	ghStatus = mocks.NewMockGHStatusUpdater()
 	envLocker = mocks.NewMockEnvLocker()
 	ch = events.CommandHandler{
 		PlanExecutor:      planner,
 		ApplyExecutor:     applier,
 		HelpExecutor:      helper,
-		VCSClient:         ghClient,
+		VCSClient:         vcsClient,
 		GHStatus:          ghStatus,
 		EventParser:       eventParsing,
 		EnvLocker:         envLocker,
@@ -54,19 +52,19 @@ func setup(t *testing.T) {
 func TestExecuteCommand_LogPanics(t *testing.T) {
 	t.Log("if there is a panic it is commented back on the pull request")
 	setup(t)
-	When(ghClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenPanic("panic")
+	When(vcsClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenPanic("panic")
 	ch.ExecuteCommand(&events.CommandContext{
 		BaseRepo: fixtures.Repo,
 		Pull:     fixtures.Pull,
 	})
-	_, _, comment := ghClient.VerifyWasCalledOnce().CreateComment(AnyRepo(), AnyPullRequest(), AnyString()).GetCapturedArguments()
+	_, _, comment := vcsClient.VerifyWasCalledOnce().CreateComment(AnyRepo(), AnyPullRequest(), AnyString()).GetCapturedArguments()
 	Assert(t, strings.Contains(comment, "Error: goroutine panic"), "comment should be about a goroutine panic")
 }
 
 func TestExecuteCommand_PullErr(t *testing.T) {
 	t.Log("if getting the pull request fails nothing should continue")
 	setup(t)
-	When(ghClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(nil, nil, errors.New("err"))
+	When(vcsClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(nil, nil, errors.New("err"))
 	ch.ExecuteCommand(&events.CommandContext{
 		BaseRepo: fixtures.Repo,
 		Pull:     fixtures.Pull,
@@ -78,7 +76,7 @@ func TestExecuteCommand_ExtractErr(t *testing.T) {
 	setup(t)
 	pull := deepcopy.Copy(gh.Pull).(github.PullRequest)
 	pull.State = github.String("open")
-	When(ghClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
+	When(vcsClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
 	When(eventParsing.ExtractPullData(&pull)).ThenReturn(fixtures.Pull, fixtures.Repo, errors.New("err"))
 
 	ch.ExecuteCommand(&events.CommandContext{
@@ -93,7 +91,7 @@ func TestExecuteCommand_ClosedPull(t *testing.T) {
 	setup(t)
 	pull := deepcopy.Copy(gh.Pull).(github.PullRequest)
 	pull.State = github.String("closed")
-	When(ghClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
+	When(vcsClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
 
 	ch.ExecuteCommand(&events.CommandContext{
 		BaseRepo: fixtures.Repo,
@@ -103,7 +101,7 @@ func TestExecuteCommand_ClosedPull(t *testing.T) {
 			Name: events.Plan,
 		},
 	})
-	ghClient.VerifyWasCalledOnce().CreateComment(fixtures.Repo, fixtures.Pull, "Atlantis commands can't be run on closed pull requests")
+	vcsClient.VerifyWasCalledOnce().CreateComment(fixtures.Repo, fixtures.Pull, "Atlantis commands can't be run on closed pull requests")
 }
 
 func TestExecuteCommand_EnvLocked(t *testing.T) {
@@ -122,7 +120,7 @@ func TestExecuteCommand_EnvLocked(t *testing.T) {
 		Command:  &cmd,
 	}
 
-	When(ghClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
+	When(vcsClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
 	When(eventParsing.ExtractPullData(&pull)).ThenReturn(fixtures.Pull, fixtures.Repo, nil)
 	When(envLocker.TryLock(fixtures.Repo.FullName, cmd.Environment, fixtures.Pull.Num)).ThenReturn(false)
 	ch.ExecuteCommand(&baseCtx)
@@ -132,7 +130,7 @@ func TestExecuteCommand_EnvLocked(t *testing.T) {
 		" Wait until the previous command is complete and try again."
 	ghStatus.VerifyWasCalledOnce().Update(fixtures.Repo, fixtures.Pull, events.Pending, &cmd)
 	ghStatus.VerifyWasCalledOnce().UpdateProjectResult(&baseCtx, events.CommandResponse{Failure: msg})
-	ghClient.VerifyWasCalledOnce().CreateComment(fixtures.Repo, fixtures.Pull,
+	vcsClient.VerifyWasCalledOnce().CreateComment(fixtures.Repo, fixtures.Pull,
 		"**Plan Failed**: "+msg+"\n\n")
 }
 
@@ -153,7 +151,7 @@ func TestExecuteCommand_FullRun(t *testing.T) {
 			Pull:     fixtures.Pull,
 			Command:  &cmd,
 		}
-		When(ghClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
+		When(vcsClient.GetPullRequest(fixtures.Repo, fixtures.Pull.Num)).ThenReturn(&pull, nil, nil)
 		When(eventParsing.ExtractPullData(&pull)).ThenReturn(fixtures.Pull, fixtures.Repo, nil)
 		When(envLocker.TryLock(fixtures.Repo.FullName, cmd.Environment, fixtures.Pull.Num)).ThenReturn(true)
 		switch c {
@@ -169,7 +167,7 @@ func TestExecuteCommand_FullRun(t *testing.T) {
 
 		ghStatus.VerifyWasCalledOnce().Update(fixtures.Repo, fixtures.Pull, events.Pending, &cmd)
 		ghStatus.VerifyWasCalledOnce().UpdateProjectResult(&baseCtx, cmdResponse)
-		ghClient.VerifyWasCalledOnce().CreateComment(AnyRepo(), AnyPullRequest(), AnyString())
+		vcsClient.VerifyWasCalledOnce().CreateComment(AnyRepo(), AnyPullRequest(), AnyString())
 		envLocker.VerifyWasCalledOnce().Unlock(fixtures.Repo.FullName, cmd.Environment, fixtures.Pull.Num)
 	}
 }

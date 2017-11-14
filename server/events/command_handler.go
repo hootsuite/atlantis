@@ -3,12 +3,13 @@ package events
 import (
 	"fmt"
 
-	"github.com/hootsuite/atlantis/server/events/github"
+	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/server/events/models"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/recovery"
-	"github.com/hootsuite/atlantis/server/vcs"
 	"github.com/pkg/errors"
+	"github.com/xanzy/go-gitlab"
 )
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go CommandRunner
@@ -18,20 +19,32 @@ type CommandRunner interface {
 	ExecuteGitlabCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *Command)
 }
 
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go GithubPullGetter
+
+type GithubPullGetter interface {
+	GetPullRequest(repo models.Repo, pullNum int) (*github.PullRequest, error)
+}
+
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go GitlabMergeRequestGetter
+
+type GitlabMergeRequestGetter interface {
+	GetMergeRequest(repoFullName string, pullNum int) (*gitlab.MergeRequest, error)
+}
+
 // CommandHandler is the first step when processing a comment command.
 type CommandHandler struct {
-	PlanExecutor      Executor
-	ApplyExecutor     Executor
-	HelpExecutor      Executor
-	LockURLGenerator  LockURLGenerator
-	VCSClient         github.VCSClientRouting
-	GithubClient      *github.GithubClient // todo: interfaces
-	GitlabClient      *github.GitlabClient
-	GHStatus          GHStatusUpdater
-	EventParser       EventParsing
-	EnvLocker         EnvLocker
-	GHCommentRenderer *GithubCommentRenderer
-	Logger            *logging.SimpleLogger
+	PlanExecutor             Executor
+	ApplyExecutor            Executor
+	HelpExecutor             Executor
+	LockURLGenerator         LockURLGenerator
+	VCSClient                vcs.ClientProxy
+	GithubPullGetter         GithubPullGetter
+	GitlabMergeRequestGetter GitlabMergeRequestGetter
+	GHStatus                 GHStatusUpdater
+	EventParser              EventParsing
+	EnvLocker                EnvLocker
+	GHCommentRenderer        *GithubCommentRenderer
+	Logger                   *logging.SimpleLogger
 }
 
 func (c *CommandHandler) ExecuteGithubCommand(baseRepo models.Repo, user models.User, pullNum int, cmd *Command) {
@@ -73,7 +86,10 @@ func (c *CommandHandler) ExecuteGitlabCommand(baseRepo models.Repo, headRepo mod
 }
 
 func (c *CommandHandler) getGithubData(baseRepo models.Repo, pullNum int) (models.PullRequest, models.Repo, error) {
-	ghPull, _, err := c.GithubClient.GetPullRequest(baseRepo, pullNum)
+	if c.GithubPullGetter == nil {
+		return models.PullRequest{}, models.Repo{}, errors.New("Atlantis not configured to support GitHub")
+	}
+	ghPull, err := c.GithubPullGetter.GetPullRequest(baseRepo, pullNum)
 	if err != nil {
 		return models.PullRequest{}, models.Repo{}, errors.Wrap(err, "making pull request API call to GitHub")
 	}
@@ -85,7 +101,10 @@ func (c *CommandHandler) getGithubData(baseRepo models.Repo, pullNum int) (model
 }
 
 func (c *CommandHandler) getGitlabData(repoFullName string, pullNum int) (models.PullRequest, error) {
-	mr, _, err := c.GitlabClient.Client.MergeRequests.GetMergeRequest(repoFullName, pullNum)
+	if c.GitlabMergeRequestGetter == nil {
+		return models.PullRequest{}, errors.New("Atlantis not configured to support GitLab")
+	}
+	mr, err := c.GitlabMergeRequestGetter.GetMergeRequest(repoFullName, pullNum)
 	if err != nil {
 		return models.PullRequest{}, errors.Wrap(err, "making merge request API call to GitLab")
 	}
@@ -101,8 +120,9 @@ func (c *CommandHandler) buildLogger(repoFullName string, pullNum int) *logging.
 func (c *CommandHandler) SetLockURL(f func(id string) (url string)) {
 	c.LockURLGenerator.SetLockURL(f)
 }
-
 func (c *CommandHandler) run(ctx *CommandContext) {
+	log := c.buildLogger(ctx.BaseRepo.FullName, ctx.Pull.Num)
+	ctx.Log = log
 	defer c.logPanics(ctx)
 
 	if ctx.Pull.State != models.Open {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/server/events/models"
-	"github.com/hootsuite/atlantis/server/vcs"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/xanzy/go-gitlab"
 )
 
