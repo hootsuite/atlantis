@@ -69,9 +69,15 @@ type WebhookConfig struct {
 func NewServer(config Config) (*Server, error) {
 	var webhooksConfig []webhooks.Config
 	for _, c := range config.Webhooks {
-		webhooksConfig = append(webhooksConfig, webhooks.Config{Channel: c.Channel, Event: c.Event, Kind: c.Kind, WorkspaceRegex: c.WorkspaceRegex})
+		config := webhooks.Config{
+			Channel:        c.Channel,
+			Event:          c.Event,
+			Kind:           c.Kind,
+			WorkspaceRegex: c.WorkspaceRegex,
+		}
+		webhooksConfig = append(webhooksConfig, config)
 	}
-	webhookManager, err := webhooks.NewWebhooksManager(webhooksConfig, config.SlackToken)
+	webhooksManager, err := webhooks.NewWebhooksManager(webhooksConfig, webhooks.NewSlackClient(config.SlackToken))
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing webhooks")
 	}
@@ -111,7 +117,7 @@ func NewServer(config Config) (*Server, error) {
 		Run:               run,
 		Workspace:         workspace,
 		ProjectPreExecute: projectPreExecute,
-		Webhooks:          webhookManager,
+		Webhooks:          webhooksManager,
 	}
 	planExecutor := &events.PlanExecutor{
 		Github:            githubClient,

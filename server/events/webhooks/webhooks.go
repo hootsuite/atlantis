@@ -1,7 +1,6 @@
 package webhooks
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 
@@ -12,7 +11,7 @@ import (
 const SlackKind = "slack"
 const ApplyEvent = "apply"
 
-//go:generate pegomock generate --package mocks -o mocks/mock_slack.go slack.go
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_webhooks.go webhooks.go
 
 type WebhooksSender interface {
 	Send(log *logging.SimpleLogger, result ApplyResult)
@@ -41,7 +40,7 @@ type Config struct {
 	Channel        string
 }
 
-func NewWebhooksManager(configs []Config, slackToken string) (*WebhooksManager, error) {
+func NewWebhooksManager(configs []Config, client SlackClient) (*WebhooksManager, error) {
 	var webhooks []WebhookSender
 	for _, c := range configs {
 		r, err := regexp.Compile(c.WorkspaceRegex)
@@ -49,20 +48,18 @@ func NewWebhooksManager(configs []Config, slackToken string) (*WebhooksManager, 
 			return nil, err
 		}
 		if c.Event != ApplyEvent {
-			return nil, fmt.Errorf("event: %s not supported. Only event: %s is supported right now", c.Kind, ApplyEvent)
+			return nil, fmt.Errorf("event: %s not supported. Only event: %s is supported right now", c.Event, ApplyEvent)
 		}
-		if c.Kind != SlackKind {
+		switch c.Kind {
+		case SlackKind:
+			slack, err := NewSlack(r, c.Channel, client)
+			if err != nil {
+				return nil, err
+			}
+			webhooks = append(webhooks, slack)
+		default:
 			return nil, fmt.Errorf("kind: %s not supported. Only kind: %s is supported right now", c.Kind, SlackKind)
 		}
-		if slackToken == "" {
-			return nil, errors.New("for slack webhooks, slack-token must be set")
-		}
-
-		slack, err := NewSlack(r, c.Channel, slackToken)
-		if err != nil {
-			return nil, err
-		}
-		webhooks = append(webhooks, slack)
 	}
 
 	return &WebhooksManager{

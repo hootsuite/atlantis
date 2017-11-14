@@ -95,7 +95,6 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	tfApplyCmd := append(append(append([]string{"apply", "-no-color"}, applyExtraArgs...), ctx.Command.Flags...), plan.LocalPath)
 	output, err := a.Terraform.RunCommandWithVersion(ctx.Log, absolutePath, tfApplyCmd, terraformVersion, env)
 
-	// Send webhooks.
 	a.Webhooks.Send(ctx.Log, webhooks.ApplyResult{
 		Environment: env,
 		User:        ctx.User,

@@ -8,67 +8,94 @@ import (
 	"github.com/pkg/errors"
 )
 
-type SlackWebhook struct {
-	EnvRegex *regexp.Regexp
-	Channel  string
-	Token    string
-	Client   *slack.Client
+const (
+	successColour = "good"
+	failureColour = "danger"
+)
+
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_slack.go slack.go
+
+type SlackClient interface {
+	AuthTest() error
+	ChannelExist(channelName string) (bool, error)
+	PostMessage(channel string, result ApplyResult) error
 }
 
-func NewSlack(r *regexp.Regexp, channel string, token string) (*SlackWebhook, error) {
-	slackClient := slack.New(token)
-	if _, err := slackClient.AuthTest(); err != nil {
+type ConcreteSlackClient struct {
+	Slack *slack.Client
+}
+
+type SlackWebhook struct {
+	Client   SlackClient
+	EnvRegex *regexp.Regexp
+	Channel  string
+}
+
+func NewSlackClient(token string) SlackClient {
+	return &ConcreteSlackClient{
+		Slack: slack.New(token),
+	}
+}
+
+func NewSlack(r *regexp.Regexp, channel string, client SlackClient) (*SlackWebhook, error) {
+	if err := client.AuthTest(); err != nil {
 		return nil, errors.Wrap(err, "testing slack authentication")
 	}
 
-	// Make sure the slack channel exists.
-	channels, err := slackClient.GetChannels(true)
+	channelExist, err := client.ChannelExist(channel)
 	if err != nil {
 		return nil, err
-	}
-	channelExist := false
-	for _, c := range channels {
-		if c.Name == channel {
-			channelExist = true
-			break
-		}
 	}
 	if !channelExist {
 		return nil, errors.Errorf("slack channel %q doesn't exist", channel)
 	}
 
 	return &SlackWebhook{
-		Client:   slackClient,
+		Client:   client,
 		EnvRegex: r,
 		Channel:  channel,
-		Token:    token,
 	}, nil
 }
 
-func (s *SlackWebhook) Send(result ApplyResult) error {
-	if !s.EnvRegex.MatchString(result.Environment) {
-		return nil
-	}
-
-	params := slack.NewPostMessageParameters()
-	params.Attachments = s.createAttachments(result)
-	params.AsUser = true
-	params.EscapeText = false
-	_, _, err := s.Client.PostMessage(s.Channel, "", params)
+func (c *ConcreteSlackClient) AuthTest() error {
+	_, err := c.Slack.AuthTest()
 	return err
 }
 
-func (s *SlackWebhook) createAttachments(result ApplyResult) []slack.Attachment {
-	var color string
+func (c *ConcreteSlackClient) ChannelExist(channelName string) (bool, error) {
+	channels, err := c.Slack.GetChannels(true)
+	if err != nil {
+		return false, err
+	}
+
+	for _, channel := range channels {
+		if channel.Name == channelName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (c *ConcreteSlackClient) PostMessage(channel string, result ApplyResult) error {
+	params := slack.NewPostMessageParameters()
+	params.Attachments = c.createAttachments(result)
+	params.AsUser = true
+	params.EscapeText = false
+	_, _, err := c.Slack.PostMessage(channel, "", params)
+	return err
+}
+
+func (c *ConcreteSlackClient) createAttachments(result ApplyResult) []slack.Attachment {
+	var colour string
 	if result.Success {
-		color = "good"
+		colour = successColour
 	} else {
-		color = "danger"
+		colour = failureColour
 	}
 
 	text := fmt.Sprintf("Applied in <%s|%s>.", result.Pull.URL, result.Repo.FullName)
 	attachment := slack.Attachment{
-		Color: color,
+		Color: colour,
 		Text:  text,
 		Fields: []slack.AttachmentField{
 			slack.AttachmentField{
@@ -83,6 +110,12 @@ func (s *SlackWebhook) createAttachments(result ApplyResult) []slack.Attachment 
 			},
 		},
 	}
-	var attachments []slack.Attachment
-	return append(attachments, attachment)
+	return []slack.Attachment{attachment}
+}
+
+func (s *SlackWebhook) Send(result ApplyResult) error {
+	if !s.EnvRegex.MatchString(result.Environment) {
+		return nil
+	}
+	return s.Client.PostMessage(s.Channel, result)
 }
