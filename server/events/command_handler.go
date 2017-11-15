@@ -19,13 +19,13 @@ type CommandRunner interface {
 	ExecuteGitlabCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *Command)
 }
 
-//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go GithubPullGetter
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_github_pull_getter.go GithubPullGetter
 
 type GithubPullGetter interface {
 	GetPullRequest(repo models.Repo, pullNum int) (*github.PullRequest, error)
 }
 
-//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go GitlabMergeRequestGetter
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_gitlab_merge_request_getter.go GitlabMergeRequestGetter
 
 type GitlabMergeRequestGetter interface {
 	GetMergeRequest(repoFullName string, pullNum int) (*gitlab.MergeRequest, error)
@@ -44,12 +44,20 @@ type CommandHandler struct {
 	EventParser              EventParsing
 	EnvLocker                EnvLocker
 	GHCommentRenderer        *GithubCommentRenderer
-	Logger                   *logging.SimpleLogger
+	Logger                   logging.SimpleLogging
 }
 
-func (c *CommandHandler) ExecuteGithubCommand(baseRepo models.Repo, user models.User, pullNum int, cmd *Command) {
+// ExecuteCommand executes the command // todo
+func (c *CommandHandler) ExecuteCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *Command, vcsHost vcs.Host) {
+	var err error
+	var pull models.PullRequest
+	if vcsHost == vcs.Github {
+		pull, headRepo, err = c.getGithubData(baseRepo, pullNum)
+	} else if vcsHost == vcs.Gitlab {
+		pull, err = c.getGitlabData(baseRepo.FullName, pullNum)
+	}
+
 	log := c.buildLogger(baseRepo.FullName, pullNum)
-	pull, headRepo, err := c.getGithubData(baseRepo, pullNum)
 	if err != nil {
 		log.Err(err.Error())
 		return
@@ -60,26 +68,7 @@ func (c *CommandHandler) ExecuteGithubCommand(baseRepo models.Repo, user models.
 		Pull:     pull,
 		HeadRepo: headRepo,
 		Command:  cmd,
-		VCSHost:  vcs.Github,
-		BaseRepo: baseRepo,
-	}
-	c.run(ctx)
-}
-
-func (c *CommandHandler) ExecuteGitlabCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *Command) {
-	log := c.buildLogger(baseRepo.FullName, pullNum)
-	pull, err := c.getGitlabData(baseRepo.FullName, pullNum)
-	if err != nil {
-		log.Err(err.Error())
-		return
-	}
-	ctx := &CommandContext{
-		User:     user,
-		Log:      log,
-		Pull:     pull,
-		HeadRepo: headRepo,
-		Command:  cmd,
-		VCSHost:  vcs.Gitlab,
+		VCSHost:  vcsHost,
 		BaseRepo: baseRepo,
 	}
 	c.run(ctx)
@@ -114,7 +103,7 @@ func (c *CommandHandler) getGitlabData(repoFullName string, pullNum int) (models
 
 func (c *CommandHandler) buildLogger(repoFullName string, pullNum int) *logging.SimpleLogger {
 	src := fmt.Sprintf("%s#%d", repoFullName, pullNum)
-	return logging.NewSimpleLogger(src, c.Logger.Logger, true, c.Logger.Level)
+	return logging.NewSimpleLogger(src, c.Logger.Underlying(), true, c.Logger.GetLevel())
 }
 
 func (c *CommandHandler) SetLockURL(f func(id string) (url string)) {
