@@ -150,7 +150,7 @@ func TestPost_GithubCommentSuccess(t *testing.T) {
 
 	// wait for 200ms so goroutine is called
 	time.Sleep(200 * time.Millisecond)
-	cr.VerifyWasCalledOnce().ExecuteGithubCommand(baseRepo, user, 1, &cmd)
+	cr.VerifyWasCalledOnce().ExecuteCommand(baseRepo, baseRepo, user, 1, &cmd, vcs.Github)
 }
 
 func TestPost_GithubPullRequestNotClosed(t *testing.T) {
@@ -226,10 +226,10 @@ func TestPost_GithubPullRequestSuccess(t *testing.T) {
 	responseContains(t, w, http.StatusOK, "Pull request cleaned successfully")
 }
 
-func setup(t *testing.T) (server.EventsController, *mocks.MockGHRequestValidator, *mocks.MockGitlabRequestParser, *emocks.MockEventParsing, *emocks.MockCommandRunner, *emocks.MockPullCleaner) {
+func setup(t *testing.T) (server.EventsController, *mocks.MockGithubRequestValidator, *mocks.MockGitlabRequestParser, *emocks.MockEventParsing, *emocks.MockCommandRunner, *emocks.MockPullCleaner) {
 	RegisterMockTestingT(t)
 	eventsReq, _ = http.NewRequest("GET", "", bytes.NewBuffer(nil))
-	v := mocks.NewMockGHRequestValidator()
+	v := mocks.NewMockGithubRequestValidator()
 	gl := mocks.NewMockGitlabRequestParser()
 	p := emocks.NewMockEventParsing()
 	cr := emocks.NewMockCommandRunner()
@@ -261,9 +261,4 @@ func AnyPull() *github.PullRequest {
 func AnyRepo() *github.Repository {
 	RegisterMatcher(NewAnyMatcher(reflect.TypeOf(&github.Repository{})))
 	return &github.Repository{}
-}
-
-func AnyCommandContext() *events.CommandContext {
-	RegisterMatcher(NewAnyMatcher(reflect.TypeOf(&events.CommandContext{})))
-	return &events.CommandContext{}
 }

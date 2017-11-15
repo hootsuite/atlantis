@@ -16,6 +16,7 @@ var Pull = github.PullRequest{
 		Login: github.String("user"),
 	},
 	Number: github.Int(1),
+	State: github.String("open"),
 }
 
 var Repo = github.Repository{

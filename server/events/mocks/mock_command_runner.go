@@ -4,11 +4,11 @@
 package mocks
 
 import (
-	"reflect"
-
 	events "github.com/hootsuite/atlantis/server/events"
 	models "github.com/hootsuite/atlantis/server/events/models"
+	vcs "github.com/hootsuite/atlantis/server/events/vcs"
 	pegomock "github.com/petergtz/pegomock"
+	"reflect"
 )
 
 type MockCommandRunner struct {
@@ -19,14 +19,9 @@ func NewMockCommandRunner() *MockCommandRunner {
 	return &MockCommandRunner{fail: pegomock.GlobalFailHandler}
 }
 
-func (mock *MockCommandRunner) ExecuteGithubCommand(baseRepo models.Repo, user models.User, pullNum int, cmd *events.Command) {
-	params := []pegomock.Param{baseRepo, user, pullNum, cmd}
-	pegomock.GetGenericMockFrom(mock).Invoke("ExecuteGithubCommand", params, []reflect.Type{})
-}
-
-func (mock *MockCommandRunner) ExecuteGitlabCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *events.Command) {
-	params := []pegomock.Param{baseRepo, headRepo, user, pullNum, cmd}
-	pegomock.GetGenericMockFrom(mock).Invoke("ExecuteGitlabCommand", params, []reflect.Type{})
+func (mock *MockCommandRunner) ExecuteCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *events.Command, vcsHost vcs.Host) {
+	params := []pegomock.Param{baseRepo, headRepo, user, pullNum, cmd, vcsHost}
+	pegomock.GetGenericMockFrom(mock).Invoke("ExecuteCommand", params, []reflect.Type{})
 }
 
 func (mock *MockCommandRunner) VerifyWasCalledOnce() *VerifierCommandRunner {
@@ -47,62 +42,23 @@ type VerifierCommandRunner struct {
 	inOrderContext         *pegomock.InOrderContext
 }
 
-func (verifier *VerifierCommandRunner) ExecuteGithubCommand(baseRepo models.Repo, user models.User, pullNum int, cmd *events.Command) *CommandRunner_ExecuteGithubCommand_OngoingVerification {
-	params := []pegomock.Param{baseRepo, user, pullNum, cmd}
-	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ExecuteGithubCommand", params)
-	return &CommandRunner_ExecuteGithubCommand_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+func (verifier *VerifierCommandRunner) ExecuteCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *events.Command, vcsHost vcs.Host) *CommandRunner_ExecuteCommand_OngoingVerification {
+	params := []pegomock.Param{baseRepo, headRepo, user, pullNum, cmd, vcsHost}
+	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ExecuteCommand", params)
+	return &CommandRunner_ExecuteCommand_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type CommandRunner_ExecuteGithubCommand_OngoingVerification struct {
+type CommandRunner_ExecuteCommand_OngoingVerification struct {
 	mock              *MockCommandRunner
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *CommandRunner_ExecuteGithubCommand_OngoingVerification) GetCapturedArguments() (models.Repo, models.User, int, *events.Command) {
-	baseRepo, user, pullNum, cmd := c.GetAllCapturedArguments()
-	return baseRepo[len(baseRepo)-1], user[len(user)-1], pullNum[len(pullNum)-1], cmd[len(cmd)-1]
+func (c *CommandRunner_ExecuteCommand_OngoingVerification) GetCapturedArguments() (models.Repo, models.Repo, models.User, int, *events.Command, vcs.Host) {
+	baseRepo, headRepo, user, pullNum, cmd, vcsHost := c.GetAllCapturedArguments()
+	return baseRepo[len(baseRepo)-1], headRepo[len(headRepo)-1], user[len(user)-1], pullNum[len(pullNum)-1], cmd[len(cmd)-1], vcsHost[len(vcsHost)-1]
 }
 
-func (c *CommandRunner_ExecuteGithubCommand_OngoingVerification) GetAllCapturedArguments() (_param0 []models.Repo, _param1 []models.User, _param2 []int, _param3 []*events.Command) {
-	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
-	if len(params) > 0 {
-		_param0 = make([]models.Repo, len(params[0]))
-		for u, param := range params[0] {
-			_param0[u] = param.(models.Repo)
-		}
-		_param1 = make([]models.User, len(params[1]))
-		for u, param := range params[1] {
-			_param1[u] = param.(models.User)
-		}
-		_param2 = make([]int, len(params[2]))
-		for u, param := range params[2] {
-			_param2[u] = param.(int)
-		}
-		_param3 = make([]*events.Command, len(params[3]))
-		for u, param := range params[3] {
-			_param3[u] = param.(*events.Command)
-		}
-	}
-	return
-}
-
-func (verifier *VerifierCommandRunner) ExecuteGitlabCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *events.Command) *CommandRunner_ExecuteGitlabCommand_OngoingVerification {
-	params := []pegomock.Param{baseRepo, headRepo, user, pullNum, cmd}
-	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ExecuteGitlabCommand", params)
-	return &CommandRunner_ExecuteGitlabCommand_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
-}
-
-type CommandRunner_ExecuteGitlabCommand_OngoingVerification struct {
-	mock              *MockCommandRunner
-	methodInvocations []pegomock.MethodInvocation
-}
-
-func (c *CommandRunner_ExecuteGitlabCommand_OngoingVerification) GetCapturedArguments() (models.Repo, models.Repo, models.User, int, *events.Command) {
-	baseRepo, headRepo, user, pullNum, cmd := c.GetAllCapturedArguments()
-	return baseRepo[len(baseRepo)-1], headRepo[len(headRepo)-1], user[len(user)-1], pullNum[len(pullNum)-1], cmd[len(cmd)-1]
-}
-
-func (c *CommandRunner_ExecuteGitlabCommand_OngoingVerification) GetAllCapturedArguments() (_param0 []models.Repo, _param1 []models.Repo, _param2 []models.User, _param3 []int, _param4 []*events.Command) {
+func (c *CommandRunner_ExecuteCommand_OngoingVerification) GetAllCapturedArguments() (_param0 []models.Repo, _param1 []models.Repo, _param2 []models.User, _param3 []int, _param4 []*events.Command, _param5 []vcs.Host) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]models.Repo, len(params[0]))
@@ -124,6 +80,10 @@ func (c *CommandRunner_ExecuteGitlabCommand_OngoingVerification) GetAllCapturedA
 		_param4 = make([]*events.Command, len(params[4]))
 		for u, param := range params[4] {
 			_param4[u] = param.(*events.Command)
+		}
+		_param5 = make([]vcs.Host, len(params[5]))
+		for u, param := range params[5] {
+			_param5[u] = param.(vcs.Host)
 		}
 	}
 	return

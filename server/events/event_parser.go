@@ -111,21 +111,11 @@ func (e *EventParser) ParseGithubIssueCommentEvent(comment *github.IssueCommentE
 	if err != nil {
 		return
 	}
-	pullCreator := comment.Issue.User.GetLogin()
-	if pullCreator == "" {
-		err = errors.New("issue.user.login is null")
-		return
-	}
-	htmlURL := comment.Issue.GetHTMLURL()
-	if htmlURL == "" {
-		err = errors.New("issue.html_url is null")
-		return
-	}
-	commentorUsername := comment.Comment.User.GetLogin()
-	if commentorUsername == "" {
+	if comment.Comment == nil || comment.Comment.User.GetLogin() == "" {
 		err = errors.New("comment.user.login is null")
 		return
 	}
+	commentorUsername := comment.Comment.User.GetLogin()
 	user = models.User{
 		Username: commentorUsername,
 	}

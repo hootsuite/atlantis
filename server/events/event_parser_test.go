@@ -148,7 +148,7 @@ func TestParseGithubRepo(t *testing.T) {
 		Equals(t, models.Repo{
 			Owner:             "owner",
 			FullName:          "owner/repo",
-			CloneURL:          "https://github-user:token@github.com/lkysow/atlantis-example.git",
+			CloneURL:          "https://github-user:github-token@github.com/lkysow/atlantis-example.git",
 			SanitizedCloneURL: Repo.GetCloneURL(),
 			Name:              "repo",
 		}, r)
@@ -173,41 +173,39 @@ func TestParseGithubIssueCommentEvent(t *testing.T) {
 	Equals(t, errors.New("repository.full_name is null"), err)
 
 	testComment = deepcopy.Copy(comment).(github.IssueCommentEvent)
-	testComment.Issue = nil
+	testComment.Comment = nil
 	_, _, _, err = parser.ParseGithubIssueCommentEvent(&testComment)
-	Equals(t, errors.New("issue.number is null"), err)
+	Equals(t, errors.New("comment.user.login is null"), err)
 
 	testComment = deepcopy.Copy(comment).(github.IssueCommentEvent)
-	testComment.Issue.User = nil
+	testComment.Comment.User = nil
 	_, _, _, err = parser.ParseGithubIssueCommentEvent(&testComment)
-	Equals(t, errors.New("issue.user.login is null"), err)
-
-	testComment = deepcopy.Copy(comment).(github.IssueCommentEvent)
-	testComment.Issue.HTMLURL = nil
-	_, _, _, err = parser.ParseGithubIssueCommentEvent(&testComment)
-	Equals(t, errors.New("issue.html_url is null"), err)
+	Equals(t, errors.New("comment.user.login is null"), err)
 
 	testComment = deepcopy.Copy(comment).(github.IssueCommentEvent)
 	testComment.Comment.User.Login = nil
 	_, _, _, err = parser.ParseGithubIssueCommentEvent(&testComment)
 	Equals(t, errors.New("comment.user.login is null"), err)
 
+	testComment = deepcopy.Copy(comment).(github.IssueCommentEvent)
+	testComment.Issue = nil
+	_, _, _, err = parser.ParseGithubIssueCommentEvent(&testComment)
+	Equals(t, errors.New("issue.number is null"), err)
+
 	// this should be successful
-	repo, user, pull, err := parser.ParseGithubIssueCommentEvent(&comment)
+	repo, user, pullNum, err := parser.ParseGithubIssueCommentEvent(&comment)
 	Ok(t, err)
 	Equals(t, models.Repo{
 		Owner:             *comment.Repo.Owner.Login,
 		FullName:          *comment.Repo.FullName,
-		CloneURL:          "https://user:token@github.com/lkysow/atlantis-example.git",
+		CloneURL:          "https://github-user:github-token@github.com/lkysow/atlantis-example.git",
 		SanitizedCloneURL: *comment.Repo.CloneURL,
 		Name:              "repo",
 	}, repo)
 	Equals(t, models.User{
 		Username: *comment.Comment.User.Login,
 	}, user)
-	Equals(t, models.PullRequest{
-		Num: *comment.Issue.Number,
-	}, pull)
+	Equals(t, *comment.Issue.Number, pullNum)
 }
 
 func TestParseGithubPull(t *testing.T) {
@@ -215,11 +213,6 @@ func TestParseGithubPull(t *testing.T) {
 	testPull.Head.SHA = nil
 	_, _, err := parser.ParseGithubPull(&testPull)
 	Equals(t, errors.New("head.sha is null"), err)
-
-	testPull = deepcopy.Copy(Pull).(github.PullRequest)
-	testPull.Base.SHA = nil
-	_, _, err = parser.ParseGithubPull(&testPull)
-	Equals(t, errors.New("base.sha is null"), err)
 
 	testPull = deepcopy.Copy(Pull).(github.PullRequest)
 	testPull.HTMLURL = nil
@@ -254,12 +247,13 @@ func TestParseGithubPull(t *testing.T) {
 		Branch:     Pull.Head.GetRef(),
 		HeadCommit: Pull.Head.GetSHA(),
 		Num:        Pull.GetNumber(),
+		State:      models.Open,
 	}, PullRes)
 
 	Equals(t, models.Repo{
 		Owner:             "owner",
 		FullName:          "owner/repo",
-		CloneURL:          "https://user:token@github.com/lkysow/atlantis-example.git",
+		CloneURL:          "https://github-user:github-token@github.com/lkysow/atlantis-example.git",
 		SanitizedCloneURL: Repo.GetCloneURL(),
 		Name:              "repo",
 	}, repoRes)

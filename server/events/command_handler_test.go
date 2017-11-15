@@ -18,7 +18,6 @@ import (
 	logmocks "github.com/hootsuite/atlantis/server/logging/mocks"
 	. "github.com/hootsuite/atlantis/testing"
 	. "github.com/petergtz/pegomock"
-	"github.com/lkysow/go-gitlab"
 )
 
 var applier *mocks.MockExecutor
@@ -114,17 +113,6 @@ func TestExecuteCommand_GithubPullParseErr(t *testing.T) {
 	Equals(t, "[ERROR] hootsuite/atlantis#1: Extracting required fields from comment data: err\n", logBytes.String())
 }
 
-func TestExecuteCommand_GitlabMergeRequestParseErr(t *testing.T) {
-	t.Log("if parsing the returned gitlab merge request fails an error should be logged")
-	setup(t)
-	var mr gitlab.MergeRequest
-	When(gitlabGetter.GetMergeRequest(fixtures.Repo.FullName, fixtures.Pull.Num)).ThenReturn(&mr, nil)
-	When(eventParsing.ParseGitlabMergeRequest(&mr)).ThenReturn(fixtures.Pull, fixtures.Repo, errors.New("err"))
-
-	ch.ExecuteCommand(fixtures.Repo, fixtures.Repo, fixtures.User, fixtures.Pull.Num, nil, vcs.Gitlab)
-	Equals(t, "[ERROR] hootsuite/atlantis#1: Extracting required fields from comment data: err\n", logBytes.String())
-}
-
 func TestExecuteCommand_ClosedPull(t *testing.T) {
 	t.Log("if a command is run on a closed pull request atlantis should" +
 		" comment saying that this is not allowed")
@@ -206,7 +194,7 @@ func AnyCommandContext() *events.CommandContext {
 }
 
 func AnyVCSHost() vcs.Host {
-
+	RegisterMatcher(NewAnyMatcher(reflect.TypeOf(vcs.Github)))
 	return vcs.Github
 }
 
