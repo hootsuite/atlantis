@@ -9,7 +9,7 @@ import (
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/logging"
-	"github.com/xanzy/go-gitlab"
+	"github.com/lkysow/go-gitlab"
 )
 
 const githubHeader = "X-Github-Event"
@@ -127,7 +127,7 @@ func (e *EventsController) HandleGithubCommentEvent(w http.ResponseWriter, event
 	// We use a goroutine so that this function returns and the connection is
 	// closed.
 	fmt.Fprintln(w, "Processing...")
-	go e.CommandRunner.ExecuteGithubCommand(baseRepo, user, pullNum, command)
+	go e.CommandRunner.ExecuteCommand(baseRepo, models.Repo{}, user, pullNum, command, vcs.Github)
 }
 
 // HandleGitlabMergeRequestEvent will delete any locks associated with the merge request
@@ -157,7 +157,7 @@ func (e *EventsController) HandleGitlabCommentEvent(w http.ResponseWriter, event
 	// We use a goroutine so that this function returns and the connection is
 	// closed.
 	fmt.Fprintln(w, "Processing...")
-	go e.CommandRunner.ExecuteGitlabCommand(baseRepo, headRepo, user, event.MergeRequest.IID, command)
+	go e.CommandRunner.ExecuteCommand(baseRepo, headRepo, user, event.MergeRequest.IID, command, vcs.Gitlab)
 }
 
 // HandleGithubPullRequestEvent will delete any locks associated with the pull request

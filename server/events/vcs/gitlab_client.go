@@ -5,7 +5,7 @@ import (
 	"net/url"
 
 	"github.com/hootsuite/atlantis/server/events/models"
-	"github.com/xanzy/go-gitlab"
+	"github.com/lkysow/go-gitlab"
 )
 
 type GitlabClient struct {

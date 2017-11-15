@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
-	"github.com/xanzy/go-gitlab"
+	"github.com/lkysow/go-gitlab"
 )
 
 const LockRouteName = "lock-detail"

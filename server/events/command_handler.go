@@ -9,14 +9,13 @@ import (
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/recovery"
 	"github.com/pkg/errors"
-	"github.com/xanzy/go-gitlab"
+	"github.com/lkysow/go-gitlab"
 )
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go CommandRunner
 
 type CommandRunner interface {
-	ExecuteGithubCommand(baseRepo models.Repo, user models.User, pullNum int, cmd *Command)
-	ExecuteGitlabCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *Command)
+	ExecuteCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *Command, vcsHost vcs.Host)
 }
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_github_pull_getter.go GithubPullGetter
@@ -47,7 +46,7 @@ type CommandHandler struct {
 	Logger                   logging.SimpleLogging
 }
 
-// ExecuteCommand executes the command // todo
+// ExecuteCommand executes the command
 func (c *CommandHandler) ExecuteCommand(baseRepo models.Repo, headRepo models.Repo, user models.User, pullNum int, cmd *Command, vcsHost vcs.Host) {
 	var err error
 	var pull models.PullRequest

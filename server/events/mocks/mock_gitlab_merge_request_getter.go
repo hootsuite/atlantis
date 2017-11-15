@@ -7,7 +7,7 @@ import (
 	"reflect"
 
 	pegomock "github.com/petergtz/pegomock"
-	go_gitlab "github.com/xanzy/go-gitlab"
+	go_gitlab "github.com/lkysow/go-gitlab"
 )
 
 type MockGitlabMergeRequestGetter struct {

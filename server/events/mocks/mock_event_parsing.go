@@ -11,7 +11,7 @@ import (
 	models "github.com/hootsuite/atlantis/server/events/models"
 	vcs "github.com/hootsuite/atlantis/server/events/vcs"
 	pegomock "github.com/petergtz/pegomock"
-	go_gitlab "github.com/xanzy/go-gitlab"
+	go_gitlab "github.com/lkysow/go-gitlab"
 )
 
 type MockEventParsing struct {

@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/vcs"
-	"github.com/xanzy/go-gitlab"
+	"github.com/lkysow/go-gitlab"
 )
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_event_parsing.go EventParsing
