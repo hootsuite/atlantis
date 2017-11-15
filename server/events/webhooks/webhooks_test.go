@@ -25,14 +25,18 @@ var validConfig = webhooks.Config{
 	Channel:        validChannel,
 }
 
-var validConfigs = []webhooks.Config{validConfig}
+func validConfigs() []webhooks.Config {
+	return []webhooks.Config{validConfig}
+}
 
 func TestNewWebhooksManager_InvalidRegex(t *testing.T) {
 	t.Log("When given an invalid regex in a config, an error is returned")
 	RegisterMockTestingT(t)
-	client := mocks.MockSlackClient()
+	client := mocks.NewMockSlackClient()
+	When(client.ChannelExist(validChannel)).ThenReturn(true, nil)
+
 	invalidRegex := "("
-	configs := validConfigs
+	configs := validConfigs()
 	configs[0].WorkspaceRegex = invalidRegex
 	_, err := webhooks.NewWebhooksManager(configs, client)
 	Assert(t, err != nil, "expected error")
@@ -42,9 +46,11 @@ func TestNewWebhooksManager_InvalidRegex(t *testing.T) {
 func TestNewWebhooksManager_UnsupportedEvent(t *testing.T) {
 	t.Log("When given an unsupported event in a config, an error is returned")
 	RegisterMockTestingT(t)
-	client := mocks.MockSlackClient()
+	client := mocks.NewMockSlackClient()
+	When(client.ChannelExist(validChannel)).ThenReturn(true, nil)
+
 	unsupportedEvent := "badevent"
-	configs := validConfigs
+	configs := validConfigs()
 	configs[0].Event = unsupportedEvent
 	_, err := webhooks.NewWebhooksManager(configs, client)
 	Assert(t, err != nil, "expected error")
@@ -54,9 +60,11 @@ func TestNewWebhooksManager_UnsupportedEvent(t *testing.T) {
 func TestNewWebhooksManager_UnsupportedKind(t *testing.T) {
 	t.Log("When given an unsupported kind in a config, an error is returned")
 	RegisterMockTestingT(t)
-	client := mocks.MockSlackClient()
+	client := mocks.NewMockSlackClient()
+	When(client.ChannelExist(validChannel)).ThenReturn(true, nil)
+
 	unsupportedKind := "badkind"
-	configs := validConfigs
+	configs := validConfigs()
 	configs[0].Kind = unsupportedKind
 	_, err := webhooks.NewWebhooksManager(configs, client)
 	Assert(t, err != nil, "expected error")
@@ -64,11 +72,11 @@ func TestNewWebhooksManager_UnsupportedKind(t *testing.T) {
 }
 
 func TestNewWebhooksManager_NoConfigSuccess(t *testing.T) {
-	t.Log("When there are no configs, everything should succeed")
+	t.Log("When there are no configs, function should succeed")
 	t.Log("passing any client should succeed")
 	var emptyConfigs []webhooks.Config
 	emptyToken := ""
-	m, err := webhooks.NewWebhooksManager(emptyConfigs, webhooks.NewClient(emptyToken))
+	m, err := webhooks.NewWebhooksManager(emptyConfigs, webhooks.NewSlackClient(emptyToken))
 	Ok(t, err)
 	Assert(t, m != nil, "manager shouldn't be nil")
 	Equals(t, 0, len(m.Webhooks))
@@ -80,10 +88,12 @@ func TestNewWebhooksManager_NoConfigSuccess(t *testing.T) {
 	Equals(t, 0, len(m.Webhooks))
 }
 func TestNewWebhooksManager_SingleConfigSuccess(t *testing.T) {
-	t.Log("One valid config should succeed")
+	t.Log("When there is one valid config, function should succeed")
 	RegisterMockTestingT(t)
-	client := mocks.MockSlackClient()
-	configs := validConfigs
+	client := mocks.NewMockSlackClient()
+	When(client.ChannelExist(validChannel)).ThenReturn(true, nil)
+
+	configs := validConfigs()
 	m, err := webhooks.NewWebhooksManager(configs, client)
 	Ok(t, err)
 	Assert(t, m != nil, "manager shouldn't be nil")
@@ -91,9 +101,11 @@ func TestNewWebhooksManager_SingleConfigSuccess(t *testing.T) {
 }
 
 func TestNewWebhooksManager_MultipleConfigSuccess(t *testing.T) {
-	t.Log("Multiple valid configs should succeed")
+	t.Log("When there are multiple valid configs, function should succeed")
 	RegisterMockTestingT(t)
-	client := mocks.MockSlackClient()
+	client := mocks.NewMockSlackClient()
+	When(client.ChannelExist(validChannel)).ThenReturn(true, nil)
+
 	var configs []webhooks.Config
 	nConfigs := 5
 	for i := 0; i < nConfigs; i++ {
@@ -109,8 +121,8 @@ func TestSend_SingleSuccess(t *testing.T) {
 	t.Log("Sending one webhook should succeed")
 	RegisterMockTestingT(t)
 	sender := mocks.NewMockWebhookSender()
-	manager := WebhooksManager{
-		Webhooks: []WebhookSender{webhookSender},
+	manager := webhooks.WebhooksManager{
+		Webhooks: []webhooks.WebhookSender{sender},
 	}
 	logger := logging.NewNoopLogger()
 	result := webhooks.ApplyResult{}
@@ -121,13 +133,13 @@ func TestSend_SingleSuccess(t *testing.T) {
 func TestSend_MultipleSuccess(t *testing.T) {
 	t.Log("Sending multiple webhooks should succeed")
 	RegisterMockTestingT(t)
-	senders := []WebhookSender{
+	senders := []*mocks.MockWebhookSender{
 		mocks.NewMockWebhookSender(),
 		mocks.NewMockWebhookSender(),
 		mocks.NewMockWebhookSender(),
 	}
-	manager := WebhooksManager{
-		Webhooks: senders,
+	manager := webhooks.WebhooksManager{
+		Webhooks: []webhooks.WebhookSender{senders[0], senders[1], senders[2]},
 	}
 	logger := logging.NewNoopLogger()
 	result := webhooks.ApplyResult{}

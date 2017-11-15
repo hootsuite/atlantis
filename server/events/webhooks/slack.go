@@ -13,12 +13,12 @@ const (
 	failureColour = "danger"
 )
 
-//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_slack.go slack.go
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_slack.go SlackClient
 
 type SlackClient interface {
 	AuthTest() error
 	ChannelExist(channelName string) (bool, error)
-	PostMessage(channel string, result ApplyResult) error
+	PostMessage(channel string, applyResult ApplyResult) error
 }
 
 type ConcreteSlackClient struct {
@@ -76,36 +76,36 @@ func (c *ConcreteSlackClient) ChannelExist(channelName string) (bool, error) {
 	return false, nil
 }
 
-func (c *ConcreteSlackClient) PostMessage(channel string, result ApplyResult) error {
+func (c *ConcreteSlackClient) PostMessage(channel string, applyResult ApplyResult) error {
 	params := slack.NewPostMessageParameters()
-	params.Attachments = c.createAttachments(result)
+	params.Attachments = c.createAttachments(applyResult)
 	params.AsUser = true
 	params.EscapeText = false
 	_, _, err := c.Slack.PostMessage(channel, "", params)
 	return err
 }
 
-func (c *ConcreteSlackClient) createAttachments(result ApplyResult) []slack.Attachment {
+func (c *ConcreteSlackClient) createAttachments(applyResult ApplyResult) []slack.Attachment {
 	var colour string
-	if result.Success {
+	if applyResult.Success {
 		colour = successColour
 	} else {
 		colour = failureColour
 	}
 
-	text := fmt.Sprintf("Applied in <%s|%s>.", result.Pull.URL, result.Repo.FullName)
+	text := fmt.Sprintf("Applied in <%s|%s>.", applyResult.Pull.URL, applyResult.Repo.FullName)
 	attachment := slack.Attachment{
 		Color: colour,
 		Text:  text,
 		Fields: []slack.AttachmentField{
 			slack.AttachmentField{
 				Title: "Environment",
-				Value: result.Environment,
+				Value: applyResult.Environment,
 				Short: true,
 			},
 			slack.AttachmentField{
 				Title: "User",
-				Value: result.User.Username,
+				Value: applyResult.User.Username,
 				Short: true,
 			},
 		},
@@ -113,9 +113,9 @@ func (c *ConcreteSlackClient) createAttachments(result ApplyResult) []slack.Atta
 	return []slack.Attachment{attachment}
 }
 
-func (s *SlackWebhook) Send(result ApplyResult) error {
-	if !s.EnvRegex.MatchString(result.Environment) {
+func (s *SlackWebhook) Send(applyResult ApplyResult) error {
+	if !s.EnvRegex.MatchString(applyResult.Environment) {
 		return nil
 	}
-	return s.Client.PostMessage(s.Channel, result)
+	return s.Client.PostMessage(s.Channel, applyResult)
 }
