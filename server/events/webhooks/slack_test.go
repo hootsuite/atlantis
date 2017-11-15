@@ -10,7 +10,7 @@ import (
 	. "github.com/petergtz/pegomock"
 )
 
-func TestSend_Success(t *testing.T) {
+func TestSend_PostMessage(t *testing.T) {
 	t.Log("Sending a hook with a matching regex should call PostMessage")
 	RegisterMockTestingT(t)
 	client := mocks.NewMockSlackClient()
@@ -26,7 +26,9 @@ func TestSend_Success(t *testing.T) {
 	result := webhooks.ApplyResult{
 		Environment: "production",
 	}
-	hook.Send(result)
+
+	t.Log("PostMessage should be called, doesn't matter if it errors or not")
+	_ = hook.Send(result)
 	client.VerifyWasCalledOnce().PostMessage(channel, result)
 }
 
