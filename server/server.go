@@ -9,36 +9,40 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
+
+	"flag"
 
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 	"github.com/hootsuite/atlantis/server/events"
-	"github.com/hootsuite/atlantis/server/events/github"
 	"github.com/hootsuite/atlantis/server/events/locking"
 	"github.com/hootsuite/atlantis/server/events/locking/boltdb"
 	"github.com/hootsuite/atlantis/server/events/run"
 	"github.com/hootsuite/atlantis/server/events/terraform"
+	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/events/webhooks"
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/static"
+	"github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
 )
 
-const lockRoute = "lock-detail"
+const LockRouteName = "lock-detail"
 
-// Server listens for GitHub events and runs the necessary Atlantis command
+// Server runs the Atlantis web server. It's used for webhook requests and the
+// Atlantis UI.
 type Server struct {
-	router           *mux.Router
-	port             int
-	commandHandler   *events.CommandHandler
-	logger           *logging.SimpleLogger
-	eventParser      *events.EventParser
-	locker           locking.Locker
-	atlantisURL      string
-	eventsController *EventsController
+	Router             *mux.Router
+	Port               int
+	CommandHandler     *events.CommandHandler
+	Logger             *logging.SimpleLogger
+	Locker             locking.Locker
+	AtlantisURL        string
+	EventsController   *EventsController
+	IndexTemplate      TemplateWriter
+	LockDetailTemplate TemplateWriter
 }
 
 // Config configures Server.
@@ -51,6 +55,10 @@ type Config struct {
 	GithubToken         string          `mapstructure:"gh-token"`
 	GithubUser          string          `mapstructure:"gh-user"`
 	GithubWebHookSecret string          `mapstructure:"gh-webhook-secret"`
+	GitlabHostname      string          `mapstructure:"gitlab-hostname"`
+	GitlabToken         string          `mapstructure:"gitlab-token"`
+	GitlabUser          string          `mapstructure:"gitlab-user"`
+	GitlabWebHookSecret string          `mapstructure:"gitlab-webhook-secret"`
 	LogLevel            string          `mapstructure:"log-level"`
 	Port                int             `mapstructure:"port"`
 	RequireApproval     bool            `mapstructure:"require-approval"`
@@ -67,6 +75,23 @@ type WebhookConfig struct {
 }
 
 func NewServer(config Config) (*Server, error) {
+	var supportedVCSHosts []vcs.Host
+	var githubClient *vcs.GithubClient
+	var gitlabClient *vcs.GitlabClient
+	if config.GithubUser != "" {
+		supportedVCSHosts = append(supportedVCSHosts, vcs.Github)
+		var err error
+		githubClient, err = vcs.NewGithubClient(config.GithubHostname, config.GithubUser, config.GithubToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if config.GitlabUser != "" {
+		supportedVCSHosts = append(supportedVCSHosts, vcs.Gitlab)
+		gitlabClient = &vcs.GitlabClient{
+			Client: gitlab.NewClient(nil, config.GitlabToken),
+		}
+	}
 	var webhooksConfig []webhooks.Config
 	for _, c := range config.Webhooks {
 		config := webhooks.Config{
@@ -77,22 +102,23 @@ func NewServer(config Config) (*Server, error) {
 		}
 		webhooksConfig = append(webhooksConfig, config)
 	}
+	// if no slack webhooks: don't care about slack
+	// if slack webhooks, error if config doesn't have slack-token
+	// must specify slack-token: if using slack webhooks
 	webhooksManager, err := webhooks.NewWebhooksManager(webhooksConfig, webhooks.NewSlackClient(config.SlackToken))
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing webhooks")
 	}
-
-	githubClient, err := github.NewClient(config.GithubHostname, config.GithubUser, config.GithubToken)
-	if err != nil {
-		return nil, err
-	}
-	githubStatus := &events.GithubStatus{Client: githubClient}
+	vcsClient := vcs.NewDefaultClientProxy(githubClient, gitlabClient)
+	commitStatusUpdater := &events.DefaultCommitStatusUpdater{Client: vcsClient}
 	terraformClient, err := terraform.NewClient()
-	if err != nil {
+	// The flag.Lookup call is to detect if we're running in a unit test. If we
+	// are, then we don't error out because we don't have/want terraform
+	// installed on our CI system where the unit tests run.
+	if err != nil && flag.Lookup("test.v") == nil {
 		return nil, errors.Wrap(err, "initializing terraform")
 	}
-	githubComments := &events.GithubCommentRenderer{}
-
+	markdownRenderer := &events.MarkdownRenderer{}
 	boltdb, err := boltdb.New(config.DataDir)
 	if err != nil {
 		return nil, err
@@ -111,7 +137,7 @@ func NewServer(config Config) (*Server, error) {
 		Terraform:    terraformClient,
 	}
 	applyExecutor := &events.ApplyExecutor{
-		Github:            githubClient,
+		VCSClient:         vcsClient,
 		Terraform:         terraformClient,
 		RequireApproval:   config.RequireApproval,
 		Run:               run,
@@ -120,151 +146,151 @@ func NewServer(config Config) (*Server, error) {
 		Webhooks:          webhooksManager,
 	}
 	planExecutor := &events.PlanExecutor{
-		Github:            githubClient,
+		VCSClient:         vcsClient,
 		Terraform:         terraformClient,
 		Run:               run,
 		Workspace:         workspace,
 		ProjectPreExecute: projectPreExecute,
 		Locker:            lockingClient,
-		ModifiedProject:   &events.ModifiedProject{},
+		ProjectFinder:     &events.ProjectFinder{},
 	}
 	helpExecutor := &events.HelpExecutor{}
 	pullClosedExecutor := &events.PullClosedExecutor{
-		Github:    githubClient,
+		VCSClient: vcsClient,
 		Locker:    lockingClient,
 		Workspace: workspace,
 	}
-	logger := logging.NewSimpleLogger("server", log.New(os.Stderr, "", log.LstdFlags), false, logging.ToLogLevel(config.LogLevel))
+	logger := logging.NewSimpleLogger("server", nil, false, logging.ToLogLevel(config.LogLevel))
 	eventParser := &events.EventParser{
 		GithubUser:  config.GithubUser,
 		GithubToken: config.GithubToken,
+		GitlabUser:  config.GitlabUser,
+		GitlabToken: config.GitlabToken,
 	}
 	commandHandler := &events.CommandHandler{
-		ApplyExecutor:     applyExecutor,
-		PlanExecutor:      planExecutor,
-		HelpExecutor:      helpExecutor,
-		LockURLGenerator:  planExecutor,
-		EventParser:       eventParser,
-		GHClient:          githubClient,
-		GHStatus:          githubStatus,
-		EnvLocker:         concurrentRunLocker,
-		GHCommentRenderer: githubComments,
-		Logger:            logger,
+		ApplyExecutor:            applyExecutor,
+		PlanExecutor:             planExecutor,
+		HelpExecutor:             helpExecutor,
+		LockURLGenerator:         planExecutor,
+		EventParser:              eventParser,
+		VCSClient:                vcsClient,
+		GithubPullGetter:         githubClient,
+		GitlabMergeRequestGetter: gitlabClient,
+		CommitStatusUpdater:      commitStatusUpdater,
+		EnvLocker:                concurrentRunLocker,
+		MarkdownRenderer:         markdownRenderer,
+		Logger:                   logger,
 	}
 	eventsController := &EventsController{
-		CommandRunner:       commandHandler,
-		PullCleaner:         pullClosedExecutor,
-		Parser:              eventParser,
-		Logger:              logger,
-		GithubWebHookSecret: []byte(config.GithubWebHookSecret),
-		Validator:           &GHRequestValidation{},
+		CommandRunner:          commandHandler,
+		PullCleaner:            pullClosedExecutor,
+		Parser:                 eventParser,
+		Logger:                 logger,
+		GithubWebHookSecret:    []byte(config.GithubWebHookSecret),
+		GithubRequestValidator: &DefaultGithubRequestValidator{},
+		GitlabRequestParser:    &DefaultGitlabRequestParser{},
+		GitlabWebHookSecret:    []byte(config.GitlabWebHookSecret),
+		SupportedVCSHosts:      supportedVCSHosts,
 	}
 	router := mux.NewRouter()
 	return &Server{
-		router:           router,
-		port:             config.Port,
-		commandHandler:   commandHandler,
-		eventParser:      eventParser,
-		logger:           logger,
-		locker:           lockingClient,
-		atlantisURL:      config.AtlantisURL,
-		eventsController: eventsController,
+		Router:             router,
+		Port:               config.Port,
+		CommandHandler:     commandHandler,
+		Logger:             logger,
+		Locker:             lockingClient,
+		AtlantisURL:        config.AtlantisURL,
+		EventsController:   eventsController,
+		IndexTemplate:      indexTemplate,
+		LockDetailTemplate: lockTemplate,
 	}, nil
 }
 
 func (s *Server) Start() error {
-	s.router.HandleFunc("/", s.index).Methods("GET").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+	s.Router.HandleFunc("/", s.Index).Methods("GET").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
 		return r.URL.Path == "/" || r.URL.Path == "/index.html"
 	})
-	s.router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: static.Asset, AssetDir: static.AssetDir, AssetInfo: static.AssetInfo}))
-	s.router.HandleFunc("/events", s.postEvents).Methods("POST")
-	s.router.HandleFunc("/locks", s.deleteLock).Methods("DELETE").Queries("id", "{id:.*}")
-	lockRoute := s.router.HandleFunc("/lock", s.getLock).Methods("GET").Queries("id", "{id}").Name(lockRoute)
+	s.Router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: static.Asset, AssetDir: static.AssetDir, AssetInfo: static.AssetInfo}))
+	s.Router.HandleFunc("/events", s.postEvents).Methods("POST")
+	s.Router.HandleFunc("/locks", s.DeleteLockRoute).Methods("DELETE").Queries("id", "{id:.*}")
+	lockRoute := s.Router.HandleFunc("/lock", s.GetLockRoute).Methods("GET").Queries("id", "{id}").Name(LockRouteName)
 	// function that planExecutor can use to construct detail view url
 	// injecting this here because this is the earliest routes are created
-	s.commandHandler.SetLockURL(func(lockID string) string {
+	s.CommandHandler.SetLockURL(func(lockID string) string {
 		// ignoring error since guaranteed to succeed if "id" is specified
 		u, _ := lockRoute.URL("id", url.QueryEscape(lockID))
-		return s.atlantisURL + u.RequestURI()
+		return s.AtlantisURL + u.RequestURI()
 	})
 	n := negroni.New(&negroni.Recovery{
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		PrintStack: false,
 		StackAll:   false,
 		StackSize:  1024 * 8,
-	}, NewRequestLogger(s.logger))
-	n.UseHandler(s.router)
-	s.logger.Warn("Atlantis started - listening on port %v", s.port)
-	return cli.NewExitError(http.ListenAndServe(fmt.Sprintf(":%d", s.port), n), 1)
+	}, NewRequestLogger(s.Logger))
+	n.UseHandler(s.Router)
+	s.Logger.Warn("Atlantis started - listening on port %v", s.Port)
+	return cli.NewExitError(http.ListenAndServe(fmt.Sprintf(":%d", s.Port), n), 1)
 }
 
-func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
-	locks, err := s.locker.List()
+func (s *Server) Index(w http.ResponseWriter, _ *http.Request) {
+	locks, err := s.Locker.List()
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprintf(w, "Could not retrieve locks: %s", err)
 		return
 	}
 
-	type lock struct {
-		LockURL      string
-		RepoFullName string
-		PullNum      int
-		Time         time.Time
-	}
-	var results []lock
+	var results []LockIndexData
 	for id, v := range locks {
-		lockURL, _ := s.router.Get(lockRoute).URL("id", url.QueryEscape(id))
-		results = append(results, lock{
+		lockURL, _ := s.Router.Get(LockRouteName).URL("id", url.QueryEscape(id))
+		results = append(results, LockIndexData{
 			LockURL:      lockURL.String(),
 			RepoFullName: v.Project.RepoFullName,
 			PullNum:      v.Pull.Num,
 			Time:         v.Time,
 		})
 	}
-	indexTemplate.Execute(w, results) // nolint: errcheck
+	s.IndexTemplate.Execute(w, results) // nolint: errcheck
 }
 
-func (s *Server) getLock(w http.ResponseWriter, r *http.Request) {
+func (s *Server) GetLockRoute(w http.ResponseWriter, r *http.Request) {
 	id, ok := mux.Vars(r)["id"]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "no lock id in request")
+		fmt.Fprint(w, "No lock id in request")
+		return
 	}
+	s.GetLock(w, r, id)
+}
+
+// GetLock handles a lock detail page view. getLockRoute is expected to
+// be called before. This function was extracted to make it testable.
+func (s *Server) GetLock(w http.ResponseWriter, _ *http.Request, id string) {
 	// get details for lock id
 	idUnencoded, err := url.QueryUnescape(id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "invalid lock id")
+		fmt.Fprint(w, "Invalid lock id")
+		return
 	}
 
 	// for the given lock key get lock data
-	lock, err := s.locker.GetLock(idUnencoded)
+	lock, err := s.Locker.GetLock(idUnencoded)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err.Error())
+		return
 	}
 	if lock == nil {
 		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, "no lock found at that id")
-	}
-
-	type lockData struct {
-		UnlockURL       string
-		LockKeyEncoded  string
-		LockKey         string
-		RepoOwner       string
-		RepoName        string
-		PullRequestLink string
-		LockedBy        string
-		Environment     string
-		Time            time.Time
+		fmt.Fprint(w, "No lock found at that id")
+		return
 	}
 
 	// extract the repo owner and repo name
 	repo := strings.Split(lock.Project.RepoFullName, "/")
 
-	l := lockData{
+	l := LockDetailData{
 		LockKeyEncoded:  id,
 		LockKey:         idUnencoded,
 		RepoOwner:       repo[0],
@@ -274,40 +300,44 @@ func (s *Server) getLock(w http.ResponseWriter, r *http.Request) {
 		Environment:     lock.Env,
 	}
 
-	lockTemplate.Execute(w, l) // nolint: errcheck
+	s.LockDetailTemplate.Execute(w, l) // nolint: errcheck
 }
 
-func (s *Server) deleteLock(w http.ResponseWriter, r *http.Request) {
+func (s *Server) DeleteLockRoute(w http.ResponseWriter, r *http.Request) {
 	id, ok := mux.Vars(r)["id"]
 	if !ok || id == "" {
-		s.respond(w, logging.Warn, http.StatusBadRequest, "No id in request")
+		s.respond(w, logging.Warn, http.StatusBadRequest, "No lock id in request")
 		return
 	}
+	s.DeleteLock(w, r, id)
+}
+
+func (s *Server) DeleteLock(w http.ResponseWriter, _ *http.Request, id string) {
 	idUnencoded, err := url.PathUnescape(id)
 	if err != nil {
 		s.respond(w, logging.Warn, http.StatusBadRequest, "Invalid lock id: %s", err)
 		return
 	}
-	lock, err := s.locker.Unlock(idUnencoded)
+	lock, err := s.Locker.Unlock(idUnencoded)
 	if err != nil {
 		s.respond(w, logging.Error, http.StatusInternalServerError, "Failed to delete lock %s: %s", idUnencoded, err)
 		return
 	}
 	if lock == nil {
-		s.respond(w, logging.Warn, http.StatusBadRequest, "No lock found at id %s", idUnencoded)
+		s.respond(w, logging.Warn, http.StatusNotFound, "No lock found at that id", idUnencoded)
 		return
 	}
 	s.respond(w, logging.Info, http.StatusOK, "Deleted lock id %s", idUnencoded)
 }
 
 // postEvents handles POST requests to our /events endpoint. These should be
-// GitHub webhook requests.
+// VCS webhook requests.
 func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
-	s.eventsController.Post(w, r)
+	s.EventsController.Post(w, r)
 }
 func (s *Server) respond(w http.ResponseWriter, lvl logging.LogLevel, code int, format string, args ...interface{}) {
 	response := fmt.Sprintf(format, args...)
-	s.logger.Log(lvl, response)
+	s.Logger.Log(lvl, response)
 	w.WriteHeader(code)
 	fmt.Fprintln(w, response)
 }

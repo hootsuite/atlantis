@@ -1,0 +1,5 @@
+slack-token: xoxb-265359714259-HO3pb1ul83SdJnzmfNFSgomG
+webhooks:
+- kind: slack
+  event: apply
+  channel: test-nickwu

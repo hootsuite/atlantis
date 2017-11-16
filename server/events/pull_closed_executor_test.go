@@ -1,16 +1,18 @@
 package events_test
 
 import (
-	"errors"
 	"reflect"
+
+	"errors"
 	"testing"
 
 	"github.com/hootsuite/atlantis/server/events"
-	ghmocks "github.com/hootsuite/atlantis/server/events/github/mocks"
 	lockmocks "github.com/hootsuite/atlantis/server/events/locking/mocks"
 	"github.com/hootsuite/atlantis/server/events/mocks"
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/events/models/fixtures"
+	"github.com/hootsuite/atlantis/server/events/vcs"
+	vcsmocks "github.com/hootsuite/atlantis/server/events/vcs/mocks"
 	. "github.com/hootsuite/atlantis/testing"
 	. "github.com/petergtz/pegomock"
 )
@@ -24,7 +26,7 @@ func TestCleanUpPullWorkspaceErr(t *testing.T) {
 	}
 	err := errors.New("err")
 	When(w.Delete(fixtures.Repo, fixtures.Pull)).ThenReturn(err)
-	actualErr := pce.CleanUpPull(fixtures.Repo, fixtures.Pull)
+	actualErr := pce.CleanUpPull(fixtures.Repo, fixtures.Pull, vcs.Github)
 	Equals(t, "cleaning workspace: err", actualErr.Error())
 }
 
@@ -39,7 +41,7 @@ func TestCleanUpPullUnlockErr(t *testing.T) {
 	}
 	err := errors.New("err")
 	When(l.UnlockByPull(fixtures.Repo.FullName, fixtures.Pull.Num)).ThenReturn(nil, err)
-	actualErr := pce.CleanUpPull(fixtures.Repo, fixtures.Pull)
+	actualErr := pce.CleanUpPull(fixtures.Repo, fixtures.Pull, vcs.Github)
 	Equals(t, "cleaning up locks: err", actualErr.Error())
 }
 
@@ -48,16 +50,16 @@ func TestCleanUpPullNoLocks(t *testing.T) {
 	RegisterMockTestingT(t)
 	w := mocks.NewMockWorkspace()
 	l := lockmocks.NewMockLocker()
-	gh := ghmocks.NewMockClient()
+	cp := vcsmocks.NewMockClientProxy()
 	pce := events.PullClosedExecutor{
 		Locker:    l,
-		Github:    gh,
+		VCSClient: cp,
 		Workspace: w,
 	}
 	When(l.UnlockByPull(fixtures.Repo.FullName, fixtures.Pull.Num)).ThenReturn(nil, nil)
-	err := pce.CleanUpPull(fixtures.Repo, fixtures.Pull)
+	err := pce.CleanUpPull(fixtures.Repo, fixtures.Pull, vcs.Github)
 	Ok(t, err)
-	gh.VerifyWasCalled(Never()).CreateComment(AnyRepo(), AnyPullRequest(), AnyString())
+	cp.VerifyWasCalled(Never()).CreateComment(AnyRepo(), AnyPullRequest(), AnyString(), AnyVCSHost())
 }
 
 func TestCleanUpPullComments(t *testing.T) {
@@ -127,18 +129,18 @@ func TestCleanUpPullComments(t *testing.T) {
 	}
 	for _, c := range cases {
 		w := mocks.NewMockWorkspace()
-		gh := ghmocks.NewMockClient()
+		cp := vcsmocks.NewMockClientProxy()
 		l := lockmocks.NewMockLocker()
 		pce := events.PullClosedExecutor{
 			Locker:    l,
-			Github:    gh,
+			VCSClient: cp,
 			Workspace: w,
 		}
 		t.Log("testing: " + c.Description)
 		When(l.UnlockByPull(fixtures.Repo.FullName, fixtures.Pull.Num)).ThenReturn(c.Locks, nil)
-		err := pce.CleanUpPull(fixtures.Repo, fixtures.Pull)
+		err := pce.CleanUpPull(fixtures.Repo, fixtures.Pull, vcs.Github)
 		Ok(t, err)
-		_, _, comment := gh.VerifyWasCalledOnce().CreateComment(AnyRepo(), AnyPullRequest(), AnyString()).GetCapturedArguments()
+		_, _, comment, _ := cp.VerifyWasCalledOnce().CreateComment(AnyRepo(), AnyPullRequest(), AnyString(), AnyVCSHost()).GetCapturedArguments()
 
 		expected := "Locks and plans deleted for the projects and environments modified in this pull request:\n\n" + c.Exp
 		Equals(t, expected, comment)

@@ -24,7 +24,7 @@ func TestSend_PostMessage(t *testing.T) {
 		Channel:  channel,
 	}
 	result := webhooks.ApplyResult{
-		Environment: "production",
+		Workspace: "production",
 	}
 
 	t.Log("PostMessage should be called, doesn't matter if it errors or not")
@@ -46,7 +46,7 @@ func TestSend_NoopSuccess(t *testing.T) {
 		Channel:  channel,
 	}
 	result := webhooks.ApplyResult{
-		Environment: "production",
+		Workspace: "production",
 	}
 	err = hook.Send(result)
 	Ok(t, err)

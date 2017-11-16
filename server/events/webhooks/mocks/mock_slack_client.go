@@ -57,6 +57,18 @@ func (mock *MockSlackClient) PostMessage(channel string, applyResult webhooks.Ap
 	return ret0
 }
 
+func (mock *MockSlackClient) TokenIsSet() bool {
+	params := []pegomock.Param{}
+	result := pegomock.GetGenericMockFrom(mock).Invoke("TokenIsSet", params, []reflect.Type{reflect.TypeOf((*bool)(nil)).Elem()})
+	var ret0 bool
+	if len(result) != 0 {
+		if result[0] != nil {
+			ret0 = result[0].(bool)
+		}
+	}
+	return ret0
+}
+
 func (mock *MockSlackClient) VerifyWasCalledOnce() *VerifierSlackClient {
 	return &VerifierSlackClient{mock, pegomock.Times(1), nil}
 }
@@ -148,4 +160,21 @@ func (c *SlackClient_PostMessage_OngoingVerification) GetAllCapturedArguments() 
 		}
 	}
 	return
+}
+
+func (verifier *VerifierSlackClient) TokenIsSet() *SlackClient_TokenIsSet_OngoingVerification {
+	params := []pegomock.Param{}
+	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "TokenIsSet", params)
+	return &SlackClient_TokenIsSet_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+}
+
+type SlackClient_TokenIsSet_OngoingVerification struct {
+	mock              *MockSlackClient
+	methodInvocations []pegomock.MethodInvocation
+}
+
+func (c *SlackClient_TokenIsSet_OngoingVerification) GetCapturedArguments() {
+}
+
+func (c *SlackClient_TokenIsSet_OngoingVerification) GetAllCapturedArguments() {
 }
