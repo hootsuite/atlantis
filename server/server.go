@@ -79,7 +79,7 @@ func NewServer(config Config) (*Server, error) {
 		}
 	}
 	vcsClient := vcs.NewDefaultClientProxy(githubClient, gitlabClient)
-	githubStatus := &events.CommitStatusUpdater{Client: vcsClient}
+	githubStatus := &events.DefaultCommitStatusUpdater{Client: vcsClient}
 	terraformClient, err := terraform.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing terraform")

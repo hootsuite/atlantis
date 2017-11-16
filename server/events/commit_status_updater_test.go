@@ -34,7 +34,7 @@ func TestStatus_String(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	RegisterMockTestingT(t)
 	client := mocks.NewMockClientProxy()
-	s := events.CommitStatusUpdater{Client: client}
+	s := events.DefaultCommitStatusUpdater{Client: client}
 	err := s.Update(repoModel, pullModel, status, &cmd, vcs.Github)
 	Ok(t, err)
 	client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, status, "Plan Success", vcs.Github)
@@ -49,7 +49,7 @@ func TestUpdateProjectResult_Error(t *testing.T) {
 		VCSHost:  vcs.Github,
 	}
 	client := mocks.NewMockClientProxy()
-	s := events.CommitStatusUpdater{Client: client}
+	s := events.DefaultCommitStatusUpdater{Client: client}
 	err := s.UpdateProjectResult(ctx, events.CommandResponse{Error: errors.New("err")})
 	Ok(t, err)
 	client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, vcs.Failed, "Plan Failed", vcs.Github)
@@ -64,7 +64,7 @@ func TestUpdateProjectResult_Failure(t *testing.T) {
 		VCSHost:  vcs.Github,
 	}
 	client := mocks.NewMockClientProxy()
-	s := events.CommitStatusUpdater{Client: client}
+	s := events.DefaultCommitStatusUpdater{Client: client}
 	err := s.UpdateProjectResult(ctx, events.CommandResponse{Failure: "failure"})
 	Ok(t, err)
 	client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, vcs.Failed, "Plan Failed", vcs.Github)
@@ -132,7 +132,7 @@ func TestUpdateProjectResult(t *testing.T) {
 		resp := events.CommandResponse{ProjectResults: results}
 
 		client := mocks.NewMockClientProxy()
-		s := events.CommitStatusUpdater{Client: client}
+		s := events.DefaultCommitStatusUpdater{Client: client}
 		err := s.UpdateProjectResult(ctx, resp)
 		Ok(t, err)
 		client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, c.Expected, "Plan "+strings.Title(c.Expected.String()), vcs.Github)

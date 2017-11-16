@@ -25,7 +25,7 @@ var helper *mocks.MockExecutor
 var planner *mocks.MockExecutor
 var eventParsing *mocks.MockEventParsing
 var vcsClient *vcsmocks.MockClientProxy
-var ghStatus *mocks.MockGHStatusUpdater
+var ghStatus *mocks.MockCommitStatusUpdater
 var githubGetter *mocks.MockGithubPullGetter
 var gitlabGetter *mocks.MockGitlabMergeRequestGetter
 var envLocker *mocks.MockEnvLocker
@@ -38,7 +38,7 @@ func setup(t *testing.T) {
 	helper = mocks.NewMockExecutor()
 	planner = mocks.NewMockExecutor()
 	eventParsing = mocks.NewMockEventParsing()
-	ghStatus = mocks.NewMockGHStatusUpdater()
+	ghStatus = mocks.NewMockCommitStatusUpdater()
 	envLocker = mocks.NewMockEnvLocker()
 	vcsClient = vcsmocks.NewMockClientProxy()
 	githubGetter = mocks.NewMockGithubPullGetter()

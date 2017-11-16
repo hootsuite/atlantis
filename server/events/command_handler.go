@@ -39,7 +39,7 @@ type CommandHandler struct {
 	VCSClient                vcs.ClientProxy
 	GithubPullGetter         GithubPullGetter
 	GitlabMergeRequestGetter GitlabMergeRequestGetter
-	GHStatus                 GHStatusUpdater
+	GHStatus                 CommitStatusUpdater
 	EventParser              EventParsing
 	EnvLocker                EnvLocker
 	GHCommentRenderer        *GithubCommentRenderer
