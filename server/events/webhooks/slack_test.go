@@ -39,14 +39,16 @@ func TestSend_NoopSuccess(t *testing.T) {
 	regex, err := regexp.Compile("weirdemv")
 	Ok(t, err)
 
+	channel := "somechannel"
 	hook := webhooks.SlackWebhook{
 		Client:   client,
 		EnvRegex: regex,
-		Channel:  "somechannel",
+		Channel:  channel,
 	}
 	result := webhooks.ApplyResult{
 		Environment: "production",
 	}
 	err = hook.Send(result)
 	Ok(t, err)
+	client.VerifyWasCalled(Never()).PostMessage(channel, result)
 }

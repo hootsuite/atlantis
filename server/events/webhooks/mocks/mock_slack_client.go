@@ -29,9 +29,9 @@ func (mock *MockSlackClient) AuthTest() error {
 	return ret0
 }
 
-func (mock *MockSlackClient) ChannelExist(channelName string) (bool, error) {
+func (mock *MockSlackClient) ChannelExists(channelName string) (bool, error) {
 	params := []pegomock.Param{channelName}
-	result := pegomock.GetGenericMockFrom(mock).Invoke("ChannelExist", params, []reflect.Type{reflect.TypeOf((*bool)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
+	result := pegomock.GetGenericMockFrom(mock).Invoke("ChannelExists", params, []reflect.Type{reflect.TypeOf((*bool)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
 	var ret0 bool
 	var ret1 error
 	if len(result) != 0 {
@@ -92,23 +92,23 @@ func (c *SlackClient_AuthTest_OngoingVerification) GetCapturedArguments() {
 func (c *SlackClient_AuthTest_OngoingVerification) GetAllCapturedArguments() {
 }
 
-func (verifier *VerifierSlackClient) ChannelExist(channelName string) *SlackClient_ChannelExist_OngoingVerification {
+func (verifier *VerifierSlackClient) ChannelExists(channelName string) *SlackClient_ChannelExists_OngoingVerification {
 	params := []pegomock.Param{channelName}
-	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ChannelExist", params)
-	return &SlackClient_ChannelExist_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ChannelExists", params)
+	return &SlackClient_ChannelExists_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type SlackClient_ChannelExist_OngoingVerification struct {
+type SlackClient_ChannelExists_OngoingVerification struct {
 	mock              *MockSlackClient
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *SlackClient_ChannelExist_OngoingVerification) GetCapturedArguments() string {
+func (c *SlackClient_ChannelExists_OngoingVerification) GetCapturedArguments() string {
 	channelName := c.GetAllCapturedArguments()
 	return channelName[len(channelName)-1]
 }
 
-func (c *SlackClient_ChannelExist_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
+func (c *SlackClient_ChannelExists_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]string, len(params[0]))
