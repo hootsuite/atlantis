@@ -288,7 +288,7 @@ func TestPost_GitlabMergeRequestSuccess(t *testing.T) {
 	When(p.ParseGitlabMergeEvent(event)).ThenReturn(pullRequest, repo)
 	w := httptest.NewRecorder()
 	e.Post(w, eventsReq)
-	responseContains(t, w, http.StatusOK, "Pull request cleaned successfully")
+	responseContains(t, w, http.StatusOK, "Merge request cleaned successfully")
 }
 
 func setup(t *testing.T) (server.EventsController, *mocks.MockGithubRequestValidator, *mocks.MockGitlabRequestParser, *emocks.MockEventParsing, *emocks.MockCommandRunner, *emocks.MockPullCleaner) {

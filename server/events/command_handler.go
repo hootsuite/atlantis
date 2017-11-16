@@ -39,10 +39,10 @@ type CommandHandler struct {
 	VCSClient                vcs.ClientProxy
 	GithubPullGetter         GithubPullGetter
 	GitlabMergeRequestGetter GitlabMergeRequestGetter
-	GHStatus                 CommitStatusUpdater
+	CommitStatusUpdater      CommitStatusUpdater
 	EventParser              EventParsing
 	EnvLocker                EnvLocker
-	GHCommentRenderer        *GithubCommentRenderer
+	MarkdownRenderer         *MarkdownRenderer
 	Logger                   logging.SimpleLogging
 }
 
@@ -119,7 +119,7 @@ func (c *CommandHandler) run(ctx *CommandContext) {
 		return
 	}
 
-	c.GHStatus.Update(ctx.BaseRepo, ctx.Pull, vcs.Pending, ctx.Command, ctx.VCSHost) // nolint: errcheck
+	c.CommitStatusUpdater.Update(ctx.BaseRepo, ctx.Pull, vcs.Pending, ctx.Command, ctx.VCSHost) // nolint: errcheck
 	if !c.EnvLocker.TryLock(ctx.BaseRepo.FullName, ctx.Command.Environment, ctx.Pull.Num) {
 		errMsg := fmt.Sprintf(
 			"The %s environment is currently locked by another"+
@@ -155,8 +155,8 @@ func (c *CommandHandler) updatePull(ctx *CommandContext, res CommandResponse) {
 	}
 
 	// Update the pull request's status icon and comment back.
-	c.GHStatus.UpdateProjectResult(ctx, res) // nolint: errcheck
-	comment := c.GHCommentRenderer.Render(res, ctx.Command.Name, ctx.Log.History.String(), ctx.Command.Verbose)
+	c.CommitStatusUpdater.UpdateProjectResult(ctx, res) // nolint: errcheck
+	comment := c.MarkdownRenderer.Render(res, ctx.Command.Name, ctx.Log.History.String(), ctx.Command.Verbose)
 	c.VCSClient.CreateComment(ctx.BaseRepo, ctx.Pull, comment, ctx.VCSHost) // nolint: errcheck
 }
 

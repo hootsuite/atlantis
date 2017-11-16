@@ -181,7 +181,7 @@ func setupPlanExecutorTest(t *testing.T) (*events.PlanExecutor, *tmocks.MockRunn
 	run := rmocks.NewMockRunner()
 	p := events.PlanExecutor{
 		VCSClient:         vcsProxy,
-		ModifiedProject:   &events.ProjectFinder{},
+		ProjectFinder:     &events.ProjectFinder{},
 		Workspace:         w,
 		ProjectPreExecute: ppe,
 		Terraform:         runner,

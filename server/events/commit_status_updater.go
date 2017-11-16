@@ -19,12 +19,12 @@ type DefaultCommitStatusUpdater struct {
 	Client vcs.ClientProxy
 }
 
-func (g *DefaultCommitStatusUpdater) Update(repo models.Repo, pull models.PullRequest, status vcs.CommitStatus, cmd *Command, host vcs.Host) error {
+func (d *DefaultCommitStatusUpdater) Update(repo models.Repo, pull models.PullRequest, status vcs.CommitStatus, cmd *Command, host vcs.Host) error {
 	description := fmt.Sprintf("%s %s", strings.Title(cmd.Name.String()), strings.Title(status.String()))
-	return g.Client.UpdateStatus(repo, pull, status, description, host)
+	return d.Client.UpdateStatus(repo, pull, status, description, host)
 }
 
-func (g *DefaultCommitStatusUpdater) UpdateProjectResult(ctx *CommandContext, res CommandResponse) error {
+func (d *DefaultCommitStatusUpdater) UpdateProjectResult(ctx *CommandContext, res CommandResponse) error {
 	var status vcs.CommitStatus
 	if res.Error != nil || res.Failure != "" {
 		status = vcs.Failed
@@ -33,12 +33,12 @@ func (g *DefaultCommitStatusUpdater) UpdateProjectResult(ctx *CommandContext, re
 		for _, p := range res.ProjectResults {
 			statuses = append(statuses, p.Status())
 		}
-		status = g.worstStatus(statuses)
+		status = d.worstStatus(statuses)
 	}
-	return g.Update(ctx.BaseRepo, ctx.Pull, status, ctx.Command, ctx.VCSHost)
+	return d.Update(ctx.BaseRepo, ctx.Pull, status, ctx.Command, ctx.VCSHost)
 }
 
-func (g *DefaultCommitStatusUpdater) worstStatus(ss []vcs.CommitStatus) vcs.CommitStatus {
+func (d *DefaultCommitStatusUpdater) worstStatus(ss []vcs.CommitStatus) vcs.CommitStatus {
 	for _, s := range ss {
 		if s == vcs.Failed {
 			return vcs.Failed

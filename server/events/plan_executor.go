@@ -22,11 +22,10 @@ type LockURLGenerator interface {
 }
 
 // atlantisUserTFVar is the name of the variable we execute terraform
-// with containing the github username of who is running the command
+// with, containing the vcs username of who is running the command
 const atlantisUserTFVar = "atlantis_user"
 
-// PlanExecutor handles everything related to running terraform plan
-// including integration with S3, Terraform, and GitHub
+// PlanExecutor handles everything related to running terraform plan.
 type PlanExecutor struct {
 	VCSClient         vcs.ClientProxy
 	Terraform         terraform.Runner
@@ -35,7 +34,7 @@ type PlanExecutor struct {
 	Run               run.Runner
 	Workspace         Workspace
 	ProjectPreExecute ProjectPreExecutor
-	ModifiedProject   ModifiedProjectFinder
+	ProjectFinder     ModifiedProjectFinder
 }
 
 type PlanSuccess struct {
@@ -54,7 +53,7 @@ func (p *PlanExecutor) Execute(ctx *CommandContext) CommandResponse {
 		return CommandResponse{Error: errors.Wrap(err, "getting modified files")}
 	}
 	ctx.Log.Info("found %d files modified in this pull request", len(modifiedFiles))
-	projects := p.ModifiedProject.FindModified(ctx.Log, modifiedFiles, ctx.BaseRepo.FullName)
+	projects := p.ProjectFinder.FindModified(ctx.Log, modifiedFiles, ctx.BaseRepo.FullName)
 	if len(projects) == 0 {
 		return CommandResponse{Failure: "No Terraform files were modified."}
 	}

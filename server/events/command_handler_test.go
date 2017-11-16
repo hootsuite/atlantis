@@ -51,13 +51,13 @@ func setup(t *testing.T) {
 		ApplyExecutor:            applier,
 		HelpExecutor:             helper,
 		VCSClient:                vcsClient,
-		GHStatus:                 ghStatus,
+		CommitStatusUpdater:      ghStatus,
 		EventParser:              eventParsing,
 		EnvLocker:                envLocker,
-		GHCommentRenderer:        &events.GithubCommentRenderer{},
+		MarkdownRenderer:         &events.MarkdownRenderer{},
 		GithubPullGetter:         githubGetter,
 		GitlabMergeRequestGetter: gitlabGetter,
-		Logger: logger,
+		Logger:                   logger,
 	}
 }
 

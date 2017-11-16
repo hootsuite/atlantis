@@ -65,7 +65,8 @@ var stringFlags = []stringFlag{
 	{
 		name: GHWebHookSecret,
 		description: "Optional secret used to validate GitHub webhooks (see https://developer.github.com/webhooks/securing/)." +
-			" If not specified, Atlantis won't be able to validate that the incoming webhook call came from GitHub.",
+			" If not specified, Atlantis won't be able to validate that the incoming webhook call came from GitHub. " +
+			"Can also be specified via the ATLANTIS_GH_WEBHOOK_SECRET environment variable.",
 		env: "ATLANTIS_GH_WEBHOOK_SECRET",
 	},
 	{
@@ -84,8 +85,10 @@ var stringFlags = []stringFlag{
 	},
 	{
 		name:        GitlabWebHookSecret,
-		description: "Optional secret used to validate GitLab webhooks. If not specified, Atlantis won't be able to validate that the incoming webhook call came from GitLab.",
-		env:         "ATLANTIS_GITLAB_WEBHOOK_SECRET",
+		description: "Optional secret used to validate GitLab webhooks." +
+			" If not specified, Atlantis won't be able to validate that the incoming webhook call came from GitLab. " +
+			"Can also be specified via the ATLANTIS_GITLAB_WEBHOOK_SECRET environment variable.",
+		env: "ATLANTIS_GITLAB_WEBHOOK_SECRET",
 	},
 	{
 		name:        LogLevelFlag,
@@ -230,7 +233,7 @@ func (s *ServerCmd) run() error {
 	if err := setDataDir(&config); err != nil {
 		return err
 	}
-	sanitizeGithubUser(&config)
+	trimAtSymbolFromUsers(&config)
 
 	// Config looks good. Start the server.
 	server, err := s.ServerCreator.NewServer(config)
@@ -292,9 +295,10 @@ func setDataDir(config *server.Config) error {
 	return nil
 }
 
-// sanitizeGithubUser trims @ from the front of the github username if it exists.
-func sanitizeGithubUser(config *server.Config) {
+// trimAtSymbolFromUsers trims @ from the front of the github and gitlab usernames
+func trimAtSymbolFromUsers(config *server.Config) {
 	config.GithubUser = strings.TrimPrefix(config.GithubUser, "@")
+	config.GitlabUser = strings.TrimPrefix(config.GitlabUser, "@")
 }
 
 // withErrPrint prints out any errors to a terminal in red.

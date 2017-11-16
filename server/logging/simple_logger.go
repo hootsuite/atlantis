@@ -26,7 +26,7 @@ type SimpleLogging interface {
 
 // SimpleLogger wraps the standard logger with leveled logging
 // and the ability to store log history for later adding it
-// to a GitHub comment.
+// to a VCS comment.
 type SimpleLogger struct {
 	// Source is added as a prefix to each log entry.
 	// It's useful if you want to trace a log entry back to a

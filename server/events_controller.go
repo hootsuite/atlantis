@@ -153,7 +153,7 @@ func (e *EventsController) HandleGitlabMergeRequestEvent(w http.ResponseWriter, 
 		return
 	}
 	e.Logger.Info("deleted locks and workspace for repo %s, pull %d", repo.FullName, pull.Num)
-	fmt.Fprintln(w, "Pull request cleaned successfully")
+	fmt.Fprintln(w, "Merge request cleaned successfully")
 }
 
 // HandleGithubPullRequestEvent will delete any locks associated with the pull request

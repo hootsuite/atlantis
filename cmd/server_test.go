@@ -258,6 +258,18 @@ func TestExecute_GithubUser(t *testing.T) {
 	Equals(t, "user", passedConfig.GithubUser)
 }
 
+func TestExecute_GitlabUser(t *testing.T) {
+	t.Log("Should remove the @ from the gitlab username if it's passed.")
+	c := setup(map[string]interface{}{
+		cmd.GitlabUserFlag:  "@user",
+		cmd.GitlabTokenFlag: "token",
+	})
+	err := c.Execute()
+	Ok(t, err)
+
+	Equals(t, "user", passedConfig.GitlabUser)
+}
+
 func TestExecute_Flags(t *testing.T) {
 	t.Log("Should use all flags that are set.")
 	c := setup(map[string]interface{}{

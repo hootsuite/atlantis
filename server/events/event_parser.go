@@ -11,6 +11,8 @@ import (
 	"github.com/lkysow/go-gitlab"
 )
 
+const gitlabPullOpened = "opened"
+
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_event_parsing.go EventParsing
 
 type Command struct {
@@ -205,7 +207,7 @@ func (e *EventParser) ParseGithubRepo(ghRepo *github.Repository) (models.Repo, e
 
 func (e *EventParser) ParseGitlabMergeEvent(event gitlab.MergeEvent) (models.PullRequest, models.Repo) {
 	modelState := models.Closed
-	if event.ObjectAttributes.State == "opened" {
+	if event.ObjectAttributes.State == gitlabPullOpened {
 		modelState = models.Open
 	}
 	// GitLab also has a "merged" state, but we map that to Closed so we don't
@@ -281,7 +283,7 @@ func (e *EventParser) ParseGitlabMergeCommentEvent(event gitlab.MergeCommentEven
 
 func (e *EventParser) ParseGitlabMergeRequest(mr *gitlab.MergeRequest) models.PullRequest {
 	pullState := models.Closed
-	if mr.State == "opened" {
+	if mr.State == gitlabPullOpened {
 		pullState = models.Open
 	}
 	// GitLab also has a "merged" state, but we map that to Closed so we don't

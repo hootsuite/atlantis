@@ -64,7 +64,7 @@ func (p *PullClosedExecutor) CleanUpPull(repo models.Repo, pull models.PullReque
 }
 
 // buildTemplateData formats the lock data into a slice that can easily be templated
-// for the GitHub comment. We organize all the environments by their respective project paths
+// for the VCS comment. We organize all the environments by their respective project paths
 // so the comment can look like: path: {path}, environments: {all-envs}
 func (p *PullClosedExecutor) buildTemplateData(locks []models.ProjectLock) []templatedProject {
 	envsByPath := make(map[string][]string)

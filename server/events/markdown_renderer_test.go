@@ -30,7 +30,7 @@ func TestRenderErr(t *testing.T) {
 		},
 	}
 
-	r := events.GithubCommentRenderer{}
+	r := events.MarkdownRenderer{}
 	for _, c := range cases {
 		res := events.CommandResponse{
 			Error: c.Error,
@@ -68,7 +68,7 @@ func TestRenderFailure(t *testing.T) {
 		},
 	}
 
-	r := events.GithubCommentRenderer{}
+	r := events.MarkdownRenderer{}
 	for _, c := range cases {
 		res := events.CommandResponse{
 			Failure: c.Failure,
@@ -87,7 +87,7 @@ func TestRenderFailure(t *testing.T) {
 
 func TestRenderErrAndFailure(t *testing.T) {
 	t.Log("if there is an error and a failure, the error should be printed")
-	r := events.GithubCommentRenderer{}
+	r := events.MarkdownRenderer{}
 	res := events.CommandResponse{
 		Error:   errors.New("error"),
 		Failure: "failure",
@@ -225,7 +225,7 @@ func TestRenderProjectResults(t *testing.T) {
 		},
 	}
 
-	r := events.GithubCommentRenderer{}
+	r := events.MarkdownRenderer{}
 	for _, c := range cases {
 		res := events.CommandResponse{
 			ProjectResults: c.ProjectResults,

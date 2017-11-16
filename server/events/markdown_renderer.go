@@ -63,8 +63,8 @@ var failureTmpl = template.Must(template.New("").Parse(failureTmplText))
 var failureWithLogTmpl = template.Must(template.New("").Parse(failureTmplText + logTmpl))
 var logTmpl = "{{if .Verbose}}\n<details><summary>Log</summary>\n  <p>\n\n```\n{{.Log}}```\n</p></details>{{end}}\n"
 
-// GithubCommentRenderer renders responses as GitHub comments
-type GithubCommentRenderer struct{}
+// MarkdownRenderer renders responses as markdown
+type MarkdownRenderer struct{}
 
 type CommonData struct {
 	Command string
@@ -89,7 +89,7 @@ type ResultData struct {
 
 // Render formats the data into a string that can be commented back to GitHub.
 // nolint: interfacer
-func (g *GithubCommentRenderer) Render(res CommandResponse, cmdName CommandName, log string, verbose bool) string {
+func (g *MarkdownRenderer) Render(res CommandResponse, cmdName CommandName, log string, verbose bool) string {
 	if cmdName == Help {
 		return g.renderTemplate(helpTmpl, nil)
 	}
@@ -104,7 +104,7 @@ func (g *GithubCommentRenderer) Render(res CommandResponse, cmdName CommandName,
 	return g.renderProjectResults(res.ProjectResults, common)
 }
 
-func (g *GithubCommentRenderer) renderProjectResults(pathResults []ProjectResult, common CommonData) string {
+func (g *MarkdownRenderer) renderProjectResults(pathResults []ProjectResult, common CommonData) string {
 	results := make(map[string]string)
 	for _, result := range pathResults {
 		if result.Error != nil {
@@ -141,7 +141,7 @@ func (g *GithubCommentRenderer) renderProjectResults(pathResults []ProjectResult
 	return g.renderTemplate(tmpl, ResultData{results, common})
 }
 
-func (g *GithubCommentRenderer) renderTemplate(tmpl *template.Template, data interface{}) string {
+func (g *MarkdownRenderer) renderTemplate(tmpl *template.Template, data interface{}) string {
 	buf := &bytes.Buffer{}
 	if err := tmpl.Execute(buf, data); err != nil {
 		return fmt.Sprintf("Failed to render template, this is a bug: %v", err)

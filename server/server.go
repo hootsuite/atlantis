@@ -28,7 +28,8 @@ import (
 
 const LockRouteName = "lock-detail"
 
-// Server listens for GitHub events and runs the necessary Atlantis command
+// Server runs the Atlantis web server. It's used for webhook requests and the
+// Atlantis UI.
 type Server struct {
 	Router             *mux.Router
 	Port               int
@@ -79,12 +80,12 @@ func NewServer(config Config) (*Server, error) {
 		}
 	}
 	vcsClient := vcs.NewDefaultClientProxy(githubClient, gitlabClient)
-	githubStatus := &events.DefaultCommitStatusUpdater{Client: vcsClient}
+	commitStatusUpdater := &events.DefaultCommitStatusUpdater{Client: vcsClient}
 	terraformClient, err := terraform.NewClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing terraform")
 	}
-	githubComments := &events.GithubCommentRenderer{}
+	markdownRenderer := &events.MarkdownRenderer{}
 	boltdb, err := boltdb.New(config.DataDir)
 	if err != nil {
 		return nil, err
@@ -117,7 +118,7 @@ func NewServer(config Config) (*Server, error) {
 		Workspace:         workspace,
 		ProjectPreExecute: projectPreExecute,
 		Locker:            lockingClient,
-		ModifiedProject:   &events.ProjectFinder{},
+		ProjectFinder:     &events.ProjectFinder{},
 	}
 	helpExecutor := &events.HelpExecutor{}
 	pullClosedExecutor := &events.PullClosedExecutor{
@@ -141,9 +142,9 @@ func NewServer(config Config) (*Server, error) {
 		VCSClient:                vcsClient,
 		GithubPullGetter:         githubClient,
 		GitlabMergeRequestGetter: gitlabClient,
-		GHStatus:                 githubStatus,
+		CommitStatusUpdater:      commitStatusUpdater,
 		EnvLocker:                concurrentRunLocker,
-		GHCommentRenderer:        githubComments,
+		MarkdownRenderer:         markdownRenderer,
 		Logger:                   logger,
 	}
 	eventsController := &EventsController{
@@ -296,7 +297,7 @@ func (s *Server) DeleteLock(w http.ResponseWriter, _ *http.Request, id string) {
 }
 
 // postEvents handles POST requests to our /events endpoint. These should be
-// GitHub webhook requests.
+// VCS webhook requests.
 func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 	s.EventsController.Post(w, r)
 }
