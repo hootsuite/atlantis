@@ -6,6 +6,7 @@ import (
 
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/logging"
+	"errors"
 )
 
 const SlackKind = "slack"
@@ -22,11 +23,11 @@ type WebhookSender interface {
 }
 
 type ApplyResult struct {
-	Environment string
-	Repo        models.Repo
-	Pull        models.PullRequest
-	User        models.User
-	Success     bool
+	Workspace string
+	Repo      models.Repo
+	Pull      models.PullRequest
+	User      models.User
+	Success   bool
 }
 
 type WebhooksManager struct {
@@ -47,18 +48,27 @@ func NewWebhooksManager(configs []Config, client SlackClient) (*WebhooksManager,
 		if err != nil {
 			return nil, err
 		}
+		if c.Kind == "" || c.Event == "" {
+			return nil, errors.New("must specify \"kind\" and \"event\" keys for webhooks")
+		}
 		if c.Event != ApplyEvent {
-			return nil, fmt.Errorf("event: %s not supported. Only event: %s is supported right now", c.Event, ApplyEvent)
+			return nil, fmt.Errorf("\"event: %s\" not supported. Only \"event: %s\" is supported right now", c.Event, ApplyEvent)
 		}
 		switch c.Kind {
 		case SlackKind:
+			if !client.TokenIsSet() {
+				return nil, errors.New("must specify top-level \"slack-token\" if using a webhook of \"kind: slack\"")
+			}
+			if c.Channel == "" {
+				return nil, errors.New("must specify \"channel\" if using a webhook of \"kind: slack\"")
+			}
 			slack, err := NewSlack(r, c.Channel, client)
 			if err != nil {
 				return nil, err
 			}
 			webhooks = append(webhooks, slack)
 		default:
-			return nil, fmt.Errorf("kind: %s not supported. Only kind: %s is supported right now", c.Kind, SlackKind)
+			return nil, fmt.Errorf("\"kind: %s\" not supported. Only \"kind: %s\" is supported right now", c.Kind, SlackKind)
 		}
 	}
 

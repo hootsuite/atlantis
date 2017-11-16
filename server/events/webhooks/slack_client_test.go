@@ -39,7 +39,7 @@ func TestPostMessage_Error(t *testing.T) {
 	client := webhooks.NewSlackClient(invalidSlackToken)
 	// todo: ?make this ApplyResult a fixture
 	result := webhooks.ApplyResult{
-		Environment: "production",
+		Workspace: "production",
 		Repo: models.Repo{
 			CloneURL:          "https://user:password@github.com/hootsuite/atlantis.git",
 			FullName:          "hootsuite/atlantis",
@@ -53,7 +53,6 @@ func TestPostMessage_Error(t *testing.T) {
 			Branch:     "branch",
 			Author:     "lkysow",
 			URL:        "url",
-			BaseCommit: "8ed0280678d49d42cd286610aabcfceb5bb673c6",
 		},
 		User: models.User{
 			Username: "lkysow",

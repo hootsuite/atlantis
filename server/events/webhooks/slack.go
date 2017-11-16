@@ -4,6 +4,7 @@ import (
 	"regexp"
 
 	"github.com/pkg/errors"
+	"fmt"
 )
 
 type SlackWebhook struct {
@@ -14,7 +15,7 @@ type SlackWebhook struct {
 
 func NewSlack(r *regexp.Regexp, channel string, client SlackClient) (*SlackWebhook, error) {
 	if err := client.AuthTest(); err != nil {
-		return nil, errors.Wrap(err, "testing slack authentication")
+		return nil, fmt.Errorf("testing slack authentication: %s. Verify your slack-token is valid.", err)
 	}
 
 	channelExists, err := client.ChannelExists(channel)
@@ -33,7 +34,7 @@ func NewSlack(r *regexp.Regexp, channel string, client SlackClient) (*SlackWebho
 }
 
 func (s *SlackWebhook) Send(applyResult ApplyResult) error {
-	if !s.EnvRegex.MatchString(applyResult.Environment) {
+	if !s.EnvRegex.MatchString(applyResult.Workspace) {
 		return nil
 	}
 	return s.Client.PostMessage(s.Channel, applyResult)
