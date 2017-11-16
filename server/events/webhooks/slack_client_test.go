@@ -62,3 +62,7 @@ func TestPostMessage_Error(t *testing.T) {
 	err := client.PostMessage("somechannel", result)
 	Assert(t, err != nil, "expected error")
 }
+
+func TestTokenIsSet(t *testing.T) {
+	client := webhooks.NewSlackClient(invalidSlackToken)
+}
