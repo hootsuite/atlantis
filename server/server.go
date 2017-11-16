@@ -20,10 +20,10 @@ import (
 	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/static"
+	"github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
-	"github.com/lkysow/go-gitlab"
 )
 
 const LockRouteName = "lock-detail"

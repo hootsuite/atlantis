@@ -8,8 +8,8 @@ import (
 	"github.com/hootsuite/atlantis/server/events/vcs"
 	"github.com/hootsuite/atlantis/server/logging"
 	"github.com/hootsuite/atlantis/server/recovery"
-	"github.com/pkg/errors"
 	"github.com/lkysow/go-gitlab"
+	"github.com/pkg/errors"
 )
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go CommandRunner

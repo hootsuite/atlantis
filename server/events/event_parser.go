@@ -221,40 +221,59 @@ func (e *EventParser) ParseGitlabMergeEvent(event gitlab.MergeEvent) (models.Pul
 	}
 
 	cloneURL := e.addGitlabAuth(event.Project.GitHTTPURL)
+	// Get owner and name from PathWithNamespace because the fields
+	// event.Project.Name and event.Project.Owner can have capitals.
+	owner, name := e.getOwnerAndName(event.Project.PathWithNamespace)
 	repo := models.Repo{
 		FullName:          event.Project.PathWithNamespace,
-		Name:              event.Project.Name,
+		Name:              name,
 		SanitizedCloneURL: event.Project.GitHTTPURL,
-		Owner:             event.Project.Namespace,
+		Owner:             owner,
 		CloneURL:          cloneURL,
 	}
 	return pull, repo
 }
 
 // addGitlabAuth adds gitlab username/password to the cloneURL.
-// Expects cloneURL to be an https URL.
+// We support http and https URLs because GitLab's docs have http:// URLs whereas
+// their API responses have https://.
 // Ex. https://gitlab.com/owner/repo.git => https://uname:pass@gitlab.com/owner/repo.git
 func (e *EventParser) addGitlabAuth(cloneURL string) string {
-	return strings.Replace(cloneURL, "https://", fmt.Sprintf("https://%s:%s@", e.GitlabUser, e.GitlabToken), -1)
+	httpsReplaced := strings.Replace(cloneURL, "https://", fmt.Sprintf("https://%s:%s@", e.GitlabUser, e.GitlabToken), -1)
+	return strings.Replace(httpsReplaced, "http://", fmt.Sprintf("http://%s:%s@", e.GitlabUser, e.GitlabToken), -1)
+}
+
+// getOwnerAndName takes pathWithNamespace that should look like "owner/repo"
+// and returns "owner", "repo"
+func (e *EventParser) getOwnerAndName(pathWithNamespace string) (string, string) {
+	pathSplit := strings.Split(pathWithNamespace, "/")
+	if len(pathSplit) > 1 {
+		return pathSplit[0], pathSplit[1]
+	}
+	return "", ""
 }
 
 // ParseGitlabMergeCommentEvent creates Atlantis models out of a GitLab event.
 func (e *EventParser) ParseGitlabMergeCommentEvent(event gitlab.MergeCommentEvent) (baseRepo models.Repo, headRepo models.Repo, user models.User) {
+	// Get owner and name from PathWithNamespace because the fields
+	// event.Project.Name and event.Project.Owner can have capitals.
+	owner, name := e.getOwnerAndName(event.Project.PathWithNamespace)
 	baseRepo = models.Repo{
 		FullName:          event.Project.PathWithNamespace,
-		Name:              event.Project.Name,
+		Name:              name,
 		SanitizedCloneURL: event.Project.GitHTTPURL,
-		Owner:             event.Project.Namespace,
+		Owner:             owner,
 		CloneURL:          e.addGitlabAuth(event.Project.GitHTTPURL),
 	}
 	user = models.User{
 		Username: event.User.Username,
 	}
+	owner, name = e.getOwnerAndName(event.MergeRequest.Source.PathWithNamespace)
 	headRepo = models.Repo{
 		FullName:          event.MergeRequest.Source.PathWithNamespace,
-		Name:              event.MergeRequest.Source.Name,
+		Name:              name,
 		SanitizedCloneURL: event.MergeRequest.Source.GitHTTPURL,
-		Owner:             event.MergeRequest.Source.Namespace,
+		Owner:             owner,
 		CloneURL:          e.addGitlabAuth(event.MergeRequest.Source.GitHTTPURL),
 	}
 	return

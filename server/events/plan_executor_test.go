@@ -1,19 +1,20 @@
 package events_test
 
 import (
+	"errors"
+	"testing"
+
 	"github.com/hootsuite/atlantis/server/events"
-	vcsmocks "github.com/hootsuite/atlantis/server/events/vcs/mocks"
-	tmocks "github.com/hootsuite/atlantis/server/events/terraform/mocks"
+	"github.com/hootsuite/atlantis/server/events/locking"
 	lmocks "github.com/hootsuite/atlantis/server/events/locking/mocks"
-	rmocks "github.com/hootsuite/atlantis/server/events/run/mocks"
+	"github.com/hootsuite/atlantis/server/events/mocks"
 	"github.com/hootsuite/atlantis/server/events/models"
+	rmocks "github.com/hootsuite/atlantis/server/events/run/mocks"
+	tmocks "github.com/hootsuite/atlantis/server/events/terraform/mocks"
+	vcsmocks "github.com/hootsuite/atlantis/server/events/vcs/mocks"
 	"github.com/hootsuite/atlantis/server/logging"
 	. "github.com/hootsuite/atlantis/testing"
 	. "github.com/petergtz/pegomock"
-	"testing"
-	"errors"
-	"github.com/hootsuite/atlantis/server/events/mocks"
-	"github.com/hootsuite/atlantis/server/events/locking"
 )
 
 var planCtx = events.CommandContext{

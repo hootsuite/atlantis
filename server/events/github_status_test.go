@@ -1,17 +1,17 @@
 package events_test
 
 import (
-	. "github.com/hootsuite/atlantis/testing"
-	. "github.com/petergtz/pegomock"
-	"testing"
-	"github.com/hootsuite/atlantis/server/events/models"
-	"github.com/hootsuite/atlantis/server/events"
-	"github.com/hootsuite/atlantis/server/events/vcs"
-	"github.com/hootsuite/atlantis/server/events/vcs/mocks"
 	"errors"
 	"strings"
-)
+	"testing"
 
+	"github.com/hootsuite/atlantis/server/events"
+	"github.com/hootsuite/atlantis/server/events/models"
+	"github.com/hootsuite/atlantis/server/events/vcs"
+	"github.com/hootsuite/atlantis/server/events/vcs/mocks"
+	. "github.com/hootsuite/atlantis/testing"
+	. "github.com/petergtz/pegomock"
+)
 
 var repoModel = models.Repo{}
 var pullModel = models.PullRequest{}
@@ -24,7 +24,7 @@ func TestStatus_String(t *testing.T) {
 	cases := map[vcs.CommitStatus]string{
 		vcs.Pending: "pending",
 		vcs.Success: "success",
-		vcs.Failed: "failed",
+		vcs.Failed:  "failed",
 	}
 	for k, v := range cases {
 		Equals(t, v, k.String())
@@ -46,7 +46,7 @@ func TestUpdateProjectResult_Error(t *testing.T) {
 		BaseRepo: repoModel,
 		Pull:     pullModel,
 		Command:  &events.Command{Name: events.Plan},
-		VCSHost: vcs.Github,
+		VCSHost:  vcs.Github,
 	}
 	client := mocks.NewMockClientProxy()
 	s := events.CommitStatusUpdater{Client: client}
@@ -61,7 +61,7 @@ func TestUpdateProjectResult_Failure(t *testing.T) {
 		BaseRepo: repoModel,
 		Pull:     pullModel,
 		Command:  &events.Command{Name: events.Plan},
-		VCSHost: vcs.Github,
+		VCSHost:  vcs.Github,
 	}
 	client := mocks.NewMockClientProxy()
 	s := events.CommitStatusUpdater{Client: client}
@@ -78,7 +78,7 @@ func TestUpdateProjectResult(t *testing.T) {
 		BaseRepo: repoModel,
 		Pull:     pullModel,
 		Command:  &events.Command{Name: events.Plan},
-		VCSHost: vcs.Github,
+		VCSHost:  vcs.Github,
 	}
 
 	cases := []struct {

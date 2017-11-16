@@ -1,12 +1,12 @@
 package events_test
 
 import (
-	"testing"
+	"bytes"
+	"errors"
+	"log"
 	"reflect"
 	"strings"
-	"bytes"
-	"log"
-	"errors"
+	"testing"
 
 	"github.com/google/go-github/github"
 	"github.com/hootsuite/atlantis/server/events"

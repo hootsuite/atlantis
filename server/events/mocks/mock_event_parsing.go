@@ -10,8 +10,8 @@ import (
 	events "github.com/hootsuite/atlantis/server/events"
 	models "github.com/hootsuite/atlantis/server/events/models"
 	vcs "github.com/hootsuite/atlantis/server/events/vcs"
-	pegomock "github.com/petergtz/pegomock"
 	go_gitlab "github.com/lkysow/go-gitlab"
+	pegomock "github.com/petergtz/pegomock"
 )
 
 type MockEventParsing struct {
