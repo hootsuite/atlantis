@@ -73,12 +73,13 @@ func (e *EventsController) handleGitlabPost(w http.ResponseWriter, r *http.Reque
 	event, err := e.GitlabRequestParser.Parse(r, bytes)
 	if err != nil {
 		e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
+		return
 	}
 	switch event := event.(type) {
-	case gitlab.MergeEvent:
-		e.HandleGitlabMergeRequestEvent(w, event)
 	case gitlab.MergeCommentEvent:
 		e.HandleGitlabCommentEvent(w, event)
+	case gitlab.MergeEvent:
+		e.HandleGitlabMergeRequestEvent(w, event)
 	default:
 		e.respond(w, logging.Debug, http.StatusOK, "Ignoring unsupported event")
 	}
@@ -130,21 +131,6 @@ func (e *EventsController) HandleGithubCommentEvent(w http.ResponseWriter, event
 	go e.CommandRunner.ExecuteCommand(baseRepo, models.Repo{}, user, pullNum, command, vcs.Github)
 }
 
-// HandleGitlabMergeRequestEvent will delete any locks associated with the merge request
-func (e *EventsController) HandleGitlabMergeRequestEvent(w http.ResponseWriter, event gitlab.MergeEvent) {
-	pull, repo := e.Parser.ParseGitlabMergeEvent(event)
-	if pull.State != models.Closed {
-		e.respond(w, logging.Debug, http.StatusOK, "Ignoring opened merge request event")
-		return
-	}
-	if err := e.PullCleaner.CleanUpPull(repo, pull, vcs.Gitlab); err != nil {
-		e.respond(w, logging.Error, http.StatusInternalServerError, "Error cleaning pull request: %s", err)
-		return
-	}
-	e.Logger.Info("deleted locks and workspace for repo %s, pull %d", repo.FullName, pull.Num)
-	fmt.Fprintln(w, "Pull request cleaned successfully")
-}
-
 func (e *EventsController) HandleGitlabCommentEvent(w http.ResponseWriter, event gitlab.MergeCommentEvent) {
 	baseRepo, headRepo, user := e.Parser.ParseGitlabMergeCommentEvent(event)
 	command, err := e.Parser.DetermineCommand(event.ObjectAttributes.Note, vcs.Gitlab)
@@ -158,6 +144,21 @@ func (e *EventsController) HandleGitlabCommentEvent(w http.ResponseWriter, event
 	// closed.
 	fmt.Fprintln(w, "Processing...")
 	go e.CommandRunner.ExecuteCommand(baseRepo, headRepo, user, event.MergeRequest.IID, command, vcs.Gitlab)
+}
+
+// HandleGitlabMergeRequestEvent will delete any locks associated with the merge request
+func (e *EventsController) HandleGitlabMergeRequestEvent(w http.ResponseWriter, event gitlab.MergeEvent) {
+	pull, repo := e.Parser.ParseGitlabMergeEvent(event)
+	if pull.State != models.Closed {
+		e.respond(w, logging.Debug, http.StatusOK, "Ignoring opened merge request event")
+		return
+	}
+	if err := e.PullCleaner.CleanUpPull(repo, pull, vcs.Gitlab); err != nil {
+		e.respond(w, logging.Error, http.StatusInternalServerError, "Error cleaning pull request: %s", err)
+		return
+	}
+	e.Logger.Info("deleted locks and workspace for repo %s, pull %d", repo.FullName, pull.Num)
+	fmt.Fprintln(w, "Pull request cleaned successfully")
 }
 
 // HandleGithubPullRequestEvent will delete any locks associated with the pull request
