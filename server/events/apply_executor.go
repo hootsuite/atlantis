@@ -16,11 +16,11 @@ import (
 
 type ApplyExecutor struct {
 	Github            github.Client
-	Terraform         *terraform.Client
+	Terraform         terraform.Runner
 	RequireApproval   bool
-	Run               *run.Run
+	Run               run.Runner
 	Workspace         Workspace
-	ProjectPreExecute *ProjectPreExecute
+	ProjectPreExecute ProjectPreExecutor
 }
 
 func (a *ApplyExecutor) Execute(ctx *CommandContext) CommandResponse {
@@ -91,6 +91,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	absolutePath := filepath.Join(repoDir, plan.Project.Path)
 	env := ctx.Command.Environment
 	tfApplyCmd := append(append(append([]string{"apply", "-no-color"}, applyExtraArgs...), ctx.Command.Flags...), plan.LocalPath)
+	fmt.Println(tfApplyCmd)
 	output, err := a.Terraform.RunCommandWithVersion(ctx.Log, absolutePath, tfApplyCmd, terraformVersion, env)
 	if err != nil {
 		return ProjectResult{Error: fmt.Errorf("%s\n%s", err.Error(), output)}
