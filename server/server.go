@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
+	"flag"
 )
 
 const LockRouteName = "lock-detail"
@@ -82,7 +83,10 @@ func NewServer(config Config) (*Server, error) {
 	vcsClient := vcs.NewDefaultClientProxy(githubClient, gitlabClient)
 	commitStatusUpdater := &events.DefaultCommitStatusUpdater{Client: vcsClient}
 	terraformClient, err := terraform.NewClient()
-	if err != nil {
+	// The flag.Lookup call is to detect if we're running in a unit test. If we
+	// are, then we don't error out because we don't have/want terraform
+	// installed on our CI system where the unit tests run.
+	if err != nil && flag.Lookup("test.v") == nil {
 		return nil, errors.Wrap(err, "initializing terraform")
 	}
 	markdownRenderer := &events.MarkdownRenderer{}
