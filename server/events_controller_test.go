@@ -75,18 +75,6 @@ func TestPost_InvalidGitlabSecret(t *testing.T) {
 	responseContains(t, w, http.StatusBadRequest, "err")
 }
 
-func TestPost_GitlabParseErr(t *testing.T) {
-	t.Log("when the gitlab payload causes a parse error we return a 400")
-	e, _, gl, _, _, _ := setup(t)
-	w := httptest.NewRecorder()
-	eventsReq.Header.Set(gitlabHeader, "value")
-	bytes := []byte(`{"not an event": ""}`)
-	When(gl.Validate(eventsReq, secret)).ThenReturn(bytes, nil)
-	When(gl.Parse(eventsReq, bytes)).ThenReturn(nil, errors.New("parse err"))
-	e.Post(w, eventsReq)
-	responseContains(t, w, http.StatusBadRequest, "parse err")
-}
-
 func TestPost_UnsupportedGithubEvent(t *testing.T) {
 	t.Log("when the event type is an unsupported github event we ignore it")
 	e, v, _, _, _, _ := setup(t)
@@ -135,7 +123,7 @@ func TestPost_GitlabCommentInvalidCommand(t *testing.T) {
 	t.Log("when the event is a gitlab comment with an invalid command we ignore it")
 	e, _, gl, p, _, _ := setup(t)
 	eventsReq.Header.Set(gitlabHeader, "value")
-	When(gl.Parse(eventsReq, nil)).ThenReturn(gitlab.MergeCommentEvent{}, nil)
+	When(gl.Validate(eventsReq, nil)).ThenReturn(gitlab.MergeCommentEvent{}, nil)
 	When(p.DetermineCommand("", vcs.Gitlab)).ThenReturn(nil, errors.New("err"))
 	w := httptest.NewRecorder()
 	e.Post(w, eventsReq)
@@ -159,7 +147,7 @@ func TestPost_GitlabCommentSuccess(t *testing.T) {
 	t.Log("when the event is a gitlab comment with a valid command we call the command handler")
 	e, _, gl, _, cr, _ := setup(t)
 	eventsReq.Header.Set(gitlabHeader, "value")
-	When(gl.Parse(eventsReq, nil)).ThenReturn(gitlab.MergeCommentEvent{}, nil)
+	When(gl.Validate(eventsReq, nil)).ThenReturn(gitlab.MergeCommentEvent{}, nil)
 	w := httptest.NewRecorder()
 	e.Post(w, eventsReq)
 	responseContains(t, w, http.StatusOK, "Processing...")
@@ -205,7 +193,7 @@ func TestPost_GitlabMergeRequestNotClosed(t *testing.T) {
 	e, _, gl, p, _, _ := setup(t)
 	eventsReq.Header.Set(gitlabHeader, "value")
 	event := gitlab.MergeEvent{}
-	When(gl.Parse(eventsReq, nil)).ThenReturn(event, nil)
+	When(gl.Validate(eventsReq, nil)).ThenReturn(event, nil)
 	When(p.ParseGitlabMergeEvent(event)).ThenReturn(models.PullRequest{State: models.Open}, models.Repo{})
 	w := httptest.NewRecorder()
 	e.Post(w, eventsReq)
@@ -262,7 +250,7 @@ func TestPost_GitlabMergeRequestErrCleaningPull(t *testing.T) {
 	e, _, gl, p, _, c := setup(t)
 	eventsReq.Header.Set(gitlabHeader, "value")
 	event := gitlab.MergeEvent{}
-	When(gl.Parse(eventsReq, nil)).ThenReturn(event, nil)
+	When(gl.Validate(eventsReq, nil)).ThenReturn(event, nil)
 	repo := models.Repo{}
 	pullRequest := models.PullRequest{State: models.Closed}
 	When(p.ParseGitlabMergeEvent(event)).ThenReturn(pullRequest, repo)
@@ -294,7 +282,7 @@ func TestPost_GitlabMergeRequestSuccess(t *testing.T) {
 	e, _, gl, p, _, _ := setup(t)
 	eventsReq.Header.Set(gitlabHeader, "value")
 	event := gitlab.MergeEvent{}
-	When(gl.Parse(eventsReq, nil)).ThenReturn(event, nil)
+	When(gl.Validate(eventsReq, nil)).ThenReturn(event, nil)
 	repo := models.Repo{}
 	pullRequest := models.PullRequest{State: models.Closed}
 	When(p.ParseGitlabMergeEvent(event)).ThenReturn(pullRequest, repo)

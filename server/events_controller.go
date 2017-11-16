@@ -65,12 +65,7 @@ func (e *EventsController) supportsHost(h vcs.Host) bool {
 }
 
 func (e *EventsController) handleGitlabPost(w http.ResponseWriter, r *http.Request) {
-	bytes, err := e.GitlabRequestParser.Validate(r, e.GitlabWebHookSecret)
-	if err != nil {
-		e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
-		return
-	}
-	event, err := e.GitlabRequestParser.Parse(r, bytes)
+	event, err := e.GitlabRequestParser.Validate(r, e.GitlabWebHookSecret)
 	if err != nil {
 		e.respond(w, logging.Warn, http.StatusBadRequest, err.Error())
 		return

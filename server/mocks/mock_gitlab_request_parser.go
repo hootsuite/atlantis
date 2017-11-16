@@ -4,10 +4,9 @@
 package mocks
 
 import (
+	pegomock "github.com/petergtz/pegomock"
 	http "net/http"
 	"reflect"
-
-	pegomock "github.com/petergtz/pegomock"
 )
 
 type MockGitlabRequestParser struct {
@@ -18,25 +17,9 @@ func NewMockGitlabRequestParser() *MockGitlabRequestParser {
 	return &MockGitlabRequestParser{fail: pegomock.GlobalFailHandler}
 }
 
-func (mock *MockGitlabRequestParser) Validate(r *http.Request, secret []byte) ([]byte, error) {
+func (mock *MockGitlabRequestParser) Validate(r *http.Request, secret []byte) (interface{}, error) {
 	params := []pegomock.Param{r, secret}
-	result := pegomock.GetGenericMockFrom(mock).Invoke("Validate", params, []reflect.Type{reflect.TypeOf((*[]byte)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
-	var ret0 []byte
-	var ret1 error
-	if len(result) != 0 {
-		if result[0] != nil {
-			ret0 = result[0].([]byte)
-		}
-		if result[1] != nil {
-			ret1 = result[1].(error)
-		}
-	}
-	return ret0, ret1
-}
-
-func (mock *MockGitlabRequestParser) Parse(r *http.Request, bytes []byte) (interface{}, error) {
-	params := []pegomock.Param{r, bytes}
-	result := pegomock.GetGenericMockFrom(mock).Invoke("Parse", params, []reflect.Type{reflect.TypeOf((*interface{})(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
+	result := pegomock.GetGenericMockFrom(mock).Invoke("Validate", params, []reflect.Type{reflect.TypeOf((*interface{})(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
 	var ret0 interface{}
 	var ret1 error
 	if len(result) != 0 {
@@ -85,37 +68,6 @@ func (c *GitlabRequestParser_Validate_OngoingVerification) GetCapturedArguments(
 }
 
 func (c *GitlabRequestParser_Validate_OngoingVerification) GetAllCapturedArguments() (_param0 []*http.Request, _param1 [][]byte) {
-	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
-	if len(params) > 0 {
-		_param0 = make([]*http.Request, len(params[0]))
-		for u, param := range params[0] {
-			_param0[u] = param.(*http.Request)
-		}
-		_param1 = make([][]byte, len(params[1]))
-		for u, param := range params[1] {
-			_param1[u] = param.([]byte)
-		}
-	}
-	return
-}
-
-func (verifier *VerifierGitlabRequestParser) Parse(r *http.Request, bytes []byte) *GitlabRequestParser_Parse_OngoingVerification {
-	params := []pegomock.Param{r, bytes}
-	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "Parse", params)
-	return &GitlabRequestParser_Parse_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
-}
-
-type GitlabRequestParser_Parse_OngoingVerification struct {
-	mock              *MockGitlabRequestParser
-	methodInvocations []pegomock.MethodInvocation
-}
-
-func (c *GitlabRequestParser_Parse_OngoingVerification) GetCapturedArguments() (*http.Request, []byte) {
-	r, bytes := c.GetAllCapturedArguments()
-	return r[len(r)-1], bytes[len(bytes)-1]
-}
-
-func (c *GitlabRequestParser_Parse_OngoingVerification) GetAllCapturedArguments() (_param0 []*http.Request, _param1 [][]byte) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]*http.Request, len(params[0]))

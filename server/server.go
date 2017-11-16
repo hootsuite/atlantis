@@ -153,7 +153,7 @@ func NewServer(config Config) (*Server, error) {
 		Logger:                 logger,
 		GithubWebHookSecret:    []byte(config.GithubWebHookSecret),
 		GithubRequestValidator: &DefaultGithubRequestValidator{},
-		GitlabRequestParser:    &DefaultGitlabRequestValidator{},
+		GitlabRequestParser:    &DefaultGitlabRequestParser{},
 		GitlabWebHookSecret:    []byte(config.GitlabWebHookSecret),
 		SupportedVCSHosts:      supportedVCSHosts,
 	}
