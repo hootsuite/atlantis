@@ -12,23 +12,30 @@ const (
 )
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_slack_client.go SlackClient
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_slack_wrapper.go SlackWrapper
 
 type SlackClient interface {
 	AuthTest() error
+	TokenIsSet() bool
 	ChannelExists(channelName string) (bool, error)
 	PostMessage(channel string, applyResult ApplyResult) error
-	TokenIsSet() bool
+}
+
+type SlackWrapper interface {
+	AuthTest() (response *slack.AuthTestResponse, error error)
+	GetChannels(excludeArchived bool) ([]slack.Channel, error)
+	PostMessage(channel, text string, parameters slack.PostMessageParameters) (string, string, error)
 }
 
 type DefaultSlackClient struct {
-	Slack *slack.Client
-	token string
+	Slack SlackWrapper
+	Token string
 }
 
 func NewSlackClient(token string) SlackClient {
 	return &DefaultSlackClient{
 		Slack: slack.New(token),
-		token: token,
+		Token: token,
 	}
 }
 
@@ -38,7 +45,7 @@ func (d *DefaultSlackClient) AuthTest() error {
 }
 
 func (d *DefaultSlackClient) TokenIsSet() bool {
-	return d.token != ""
+	return d.Token != ""
 }
 
 func (d *DefaultSlackClient) ChannelExists(channelName string) (bool, error) {
@@ -46,7 +53,6 @@ func (d *DefaultSlackClient) ChannelExists(channelName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
 	for _, channel := range channels {
 		if channel.Name == channelName {
 			return true, nil

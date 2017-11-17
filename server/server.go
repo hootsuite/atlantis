@@ -102,9 +102,6 @@ func NewServer(config Config) (*Server, error) {
 		}
 		webhooksConfig = append(webhooksConfig, config)
 	}
-	// if no slack webhooks: don't care about slack
-	// if slack webhooks, error if config doesn't have slack-token
-	// must specify slack-token: if using slack webhooks
 	webhooksManager, err := webhooks.NewWebhooksManager(webhooksConfig, webhooks.NewSlackClient(config.SlackToken))
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing webhooks")
