@@ -102,7 +102,7 @@ func NewServer(config Config) (*Server, error) {
 		}
 		webhooksConfig = append(webhooksConfig, config)
 	}
-	webhooksManager, err := webhooks.NewWebhooksManager(webhooksConfig, webhooks.NewSlackClient(config.SlackToken))
+	webhooksManager, err := webhooks.NewMultiWebhookSender(webhooksConfig, webhooks.NewSlackClient(config.SlackToken))
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing webhooks")
 	}

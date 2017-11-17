@@ -14,48 +14,9 @@ import (
 	. "github.com/petergtz/pegomock"
 )
 
-var wrapper *mocks.MockSlackWrapper
+var underlying *mocks.MockUnderlyingSlackClient
 var client webhooks.DefaultSlackClient
 var result webhooks.ApplyResult
-
-func setup(t *testing.T) {
-	RegisterMockTestingT(t)
-	wrapper = mocks.NewMockSlackWrapper()
-	client = webhooks.DefaultSlackClient{
-		Slack: wrapper,
-		Token: "sometoken",
-	}
-	result = webhooks.ApplyResult{
-		Workspace: "production",
-		Repo: models.Repo{
-			CloneURL:          "https://user:password@github.com/hootsuite/atlantis.git",
-			FullName:          "hootsuite/atlantis",
-			Owner:             "hootsuite",
-			SanitizedCloneURL: "https://github.com/hootsuite/atlantis.git",
-			Name:              "atlantis",
-		},
-		Pull: models.PullRequest{
-			Num:        1,
-			HeadCommit: "16ca62f65c18ff456c6ef4cacc8d4826e264bb17",
-			Branch:     "branch",
-			Author:     "lkysow",
-			URL:        "url",
-		},
-		User: models.User{
-			Username: "lkysow",
-		},
-		Success: true,
-	}
-}
-
-func TestNewSlackClient(t *testing.T) {
-	t.Log("NewSlackClient should always return a non-nil client")
-	c := webhooks.NewSlackClient("invalidSlackToken")
-	Assert(t, c != nil, "SlackClient shouldn't be nil")
-
-	c = webhooks.NewSlackClient("")
-	Assert(t, c != nil, "SlackClient shouldn't be nil")
-}
 
 func TestAuthTest_Success(t *testing.T) {
 	t.Log("When the underylying client suceeds, function should succeed")
@@ -67,7 +28,7 @@ func TestAuthTest_Success(t *testing.T) {
 func TestAuthTest_Error(t *testing.T) {
 	t.Log("When the underylying slack client errors, an error should be returned")
 	setup(t)
-	When(wrapper.AuthTest()).ThenReturn(nil, errors.New(""))
+	When(underlying.AuthTest()).ThenReturn(nil, errors.New(""))
 	err := client.AuthTest()
 	Assert(t, err != nil, "expected error")
 }
@@ -87,8 +48,7 @@ func TestTokenIsSet(t *testing.T) {
 func TestChannelExists_False(t *testing.T) {
 	t.Log("When the slack channel doesn't exist, function should return false")
 	setup(t)
-	When(wrapper.GetChannels(true)).ThenReturn([]slack.Channel{}, nil)
-
+	When(underlying.GetChannels(true)).ThenReturn(nil, nil)
 	exists, err := client.ChannelExists("somechannel")
 	Ok(t, err)
 	Equals(t, false, exists)
@@ -101,8 +61,7 @@ func TestChannelExists_True(t *testing.T) {
 	var channel slack.Channel
 	err := json.Unmarshal([]byte(channelJSON), &channel)
 	Ok(t, err)
-
-	When(wrapper.GetChannels(true)).ThenReturn([]slack.Channel{channel}, nil)
+	When(underlying.GetChannels(true)).ThenReturn([]slack.Channel{channel}, nil)
 
 	exists, err := client.ChannelExists("existingchannel")
 	Ok(t, err)
@@ -112,7 +71,7 @@ func TestChannelExists_True(t *testing.T) {
 func TestChannelExists_Error(t *testing.T) {
 	t.Log("When the underylying slack client errors, an error should be returned")
 	setup(t)
-	When(wrapper.GetChannels(true)).ThenReturn(nil, errors.New(""))
+	When(underlying.GetChannels(true)).ThenReturn(nil, errors.New(""))
 
 	_, err := client.ChannelExists("anychannel")
 	Assert(t, err != nil, "expected error")
@@ -145,7 +104,7 @@ func TestPostMessage_Success(t *testing.T) {
 	channel := "somechannel"
 	err := client.PostMessage(channel, result)
 	Ok(t, err)
-	wrapper.VerifyWasCalledOnce().PostMessage(channel, "", expParams)
+	underlying.VerifyWasCalledOnce().PostMessage(channel, "", expParams)
 
 	t.Log("When apply fails, function should succeed and indicate failure")
 	result.Success = false
@@ -154,7 +113,7 @@ func TestPostMessage_Success(t *testing.T) {
 
 	err = client.PostMessage(channel, result)
 	Ok(t, err)
-	wrapper.VerifyWasCalledOnce().PostMessage(channel, "", expParams)
+	underlying.VerifyWasCalledOnce().PostMessage(channel, "", expParams)
 }
 
 func TestPostMessage_Error(t *testing.T) {
@@ -182,8 +141,31 @@ func TestPostMessage_Error(t *testing.T) {
 	expParams.EscapeText = false
 
 	channel := "somechannel"
-	When(wrapper.PostMessage(channel, "", expParams)).ThenReturn("", "", errors.New(""))
+	When(underlying.PostMessage(channel, "", expParams)).ThenReturn("", "", errors.New(""))
 
 	err := client.PostMessage(channel, result)
 	Assert(t, err != nil, "expected error")
+}
+
+func setup(t *testing.T) {
+	RegisterMockTestingT(t)
+	underlying = mocks.NewMockUnderlyingSlackClient()
+	client = webhooks.DefaultSlackClient{
+		Slack: underlying,
+		Token: "sometoken",
+	}
+	result = webhooks.ApplyResult{
+		Workspace: "production",
+		Repo: models.Repo{
+			FullName: "hootsuite/atlantis",
+		},
+		Pull: models.PullRequest{
+			Num: 1,
+			URL: "url",
+		},
+		User: models.User{
+			Username: "lkysow",
+		},
+		Success: true,
+	}
 }

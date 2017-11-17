@@ -12,8 +12,8 @@ const (
 )
 
 //go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_slack_client.go SlackClient
-//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_slack_wrapper.go SlackWrapper
 
+// SlackClient handles making API calls to Slack.
 type SlackClient interface {
 	AuthTest() error
 	TokenIsSet() bool
@@ -21,14 +21,18 @@ type SlackClient interface {
 	PostMessage(channel string, applyResult ApplyResult) error
 }
 
-type SlackWrapper interface {
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_underlying_slack_client.go UnderlyingSlackClient
+
+// UnderlyingSlackClient wraps the nlopes/slack.Client implementation so
+// we can mock it during tests.
+type UnderlyingSlackClient interface {
 	AuthTest() (response *slack.AuthTestResponse, error error)
 	GetChannels(excludeArchived bool) ([]slack.Channel, error)
 	PostMessage(channel, text string, parameters slack.PostMessageParameters) (string, string, error)
 }
 
 type DefaultSlackClient struct {
-	Slack SlackWrapper
+	Slack UnderlyingSlackClient
 	Token string
 }
 

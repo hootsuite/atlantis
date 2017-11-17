@@ -6,6 +6,7 @@ import (
 
 	"github.com/hootsuite/atlantis/server/events/webhooks"
 	"github.com/hootsuite/atlantis/server/events/webhooks/mocks"
+	"github.com/hootsuite/atlantis/server/logging"
 	. "github.com/hootsuite/atlantis/testing"
 	. "github.com/petergtz/pegomock"
 )
@@ -19,16 +20,16 @@ func TestSend_PostMessage(t *testing.T) {
 
 	channel := "somechannel"
 	hook := webhooks.SlackWebhook{
-		Client:   client,
-		EnvRegex: regex,
-		Channel:  channel,
+		Client:         client,
+		WorkspaceRegex: regex,
+		Channel:        channel,
 	}
 	result := webhooks.ApplyResult{
 		Workspace: "production",
 	}
 
 	t.Log("PostMessage should be called, doesn't matter if it errors or not")
-	_ = hook.Send(result)
+	_ = hook.Send(logging.NewNoopLogger(), result)
 	client.VerifyWasCalledOnce().PostMessage(channel, result)
 }
 
@@ -41,14 +42,14 @@ func TestSend_NoopSuccess(t *testing.T) {
 
 	channel := "somechannel"
 	hook := webhooks.SlackWebhook{
-		Client:   client,
-		EnvRegex: regex,
-		Channel:  channel,
+		Client:         client,
+		WorkspaceRegex: regex,
+		Channel:        channel,
 	}
 	result := webhooks.ApplyResult{
 		Workspace: "production",
 	}
-	err = hook.Send(result)
+	err = hook.Send(logging.NewNoopLogger(), result)
 	Ok(t, err)
 	client.VerifyWasCalled(Never()).PostMessage(channel, result)
 }

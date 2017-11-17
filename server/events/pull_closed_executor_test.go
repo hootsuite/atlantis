@@ -1,9 +1,8 @@
 package events_test
 
 import (
-	"reflect"
-
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/hootsuite/atlantis/server/events"

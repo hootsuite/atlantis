@@ -4,24 +4,24 @@ import (
 	"fmt"
 	"regexp"
 
+	"errors"
+
 	"github.com/hootsuite/atlantis/server/events/models"
 	"github.com/hootsuite/atlantis/server/logging"
-	"errors"
 )
 
 const SlackKind = "slack"
 const ApplyEvent = "apply"
 
-//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_webhooks.go WebhookSender
+//go:generate pegomock generate --use-experimental-model-gen --package mocks -o mocks/mock_sender.go Sender
 
-type WebhooksSender interface {
-	Send(log *logging.SimpleLogger, result ApplyResult)
+// Sender sends webhooks.
+type Sender interface {
+	// Send sends the webhook (if the implementation thinks it should).
+	Send(log *logging.SimpleLogger, applyResult ApplyResult) error
 }
 
-type WebhookSender interface {
-	Send(ApplyResult) error
-}
-
+// ApplyResult is the result of a terraform apply.
 type ApplyResult struct {
 	Workspace string
 	Repo      models.Repo
@@ -30,8 +30,9 @@ type ApplyResult struct {
 	Success   bool
 }
 
-type WebhooksManager struct {
-	Webhooks []WebhookSender
+// MultiWebhookSender sends multiple webhooks for each one it's configured for.
+type MultiWebhookSender struct {
+	Webhooks []Sender
 }
 
 type Config struct {
@@ -41,8 +42,8 @@ type Config struct {
 	Channel        string
 }
 
-func NewWebhooksManager(configs []Config, client SlackClient) (*WebhooksManager, error) {
-	var webhooks []WebhookSender
+func NewMultiWebhookSender(configs []Config, client SlackClient) (*MultiWebhookSender, error) {
+	var webhooks []Sender
 	for _, c := range configs {
 		r, err := regexp.Compile(c.WorkspaceRegex)
 		if err != nil {
@@ -72,15 +73,17 @@ func NewWebhooksManager(configs []Config, client SlackClient) (*WebhooksManager,
 		}
 	}
 
-	return &WebhooksManager{
+	return &MultiWebhookSender{
 		Webhooks: webhooks,
 	}, nil
 }
 
-func (w *WebhooksManager) Send(log *logging.SimpleLogger, result ApplyResult) {
+// Send sends the webhook using its Webhooks.
+func (w *MultiWebhookSender) Send(log *logging.SimpleLogger, result ApplyResult) error {
 	for _, w := range w.Webhooks {
-		if err := w.Send(result); err != nil {
+		if err := w.Send(log, result); err != nil {
 			log.Warn("error sending slack webhook: %s", err)
 		}
 	}
+	return nil
 }

@@ -22,7 +22,7 @@ type ApplyExecutor struct {
 	Run               *run.Run
 	Workspace         Workspace
 	ProjectPreExecute *ProjectPreExecute
-	Webhooks          webhooks.WebhooksSender
+	Webhooks          webhooks.Sender
 }
 
 func (a *ApplyExecutor) Execute(ctx *CommandContext) CommandResponse {
@@ -95,7 +95,7 @@ func (a *ApplyExecutor) apply(ctx *CommandContext, repoDir string, plan models.P
 	tfApplyCmd := append(append(append([]string{"apply", "-no-color"}, applyExtraArgs...), ctx.Command.Flags...), plan.LocalPath)
 	output, err := a.Terraform.RunCommandWithVersion(ctx.Log, absolutePath, tfApplyCmd, terraformVersion, env)
 
-	a.Webhooks.Send(ctx.Log, webhooks.ApplyResult{
+	a.Webhooks.Send(ctx.Log, webhooks.ApplyResult{ // nolint: errcheck
 		Workspace: env,
 		User:      ctx.User,
 		Repo:      ctx.BaseRepo,

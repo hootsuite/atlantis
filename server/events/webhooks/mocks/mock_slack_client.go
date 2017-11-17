@@ -4,9 +4,10 @@
 package mocks
 
 import (
+	"reflect"
+
 	webhooks "github.com/hootsuite/atlantis/server/events/webhooks"
 	pegomock "github.com/petergtz/pegomock"
-	"reflect"
 )
 
 type MockSlackClient struct {
