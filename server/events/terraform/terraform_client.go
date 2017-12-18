@@ -19,7 +19,7 @@ import (
 type Runner interface {
 	Version() *version.Version
 	RunCommandWithVersion(log *logging.SimpleLogger, path string, args []string, v *version.Version, env string) (string, error)
-	RunInitAndEnv(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, version *version.Version) ([]string, error)
+	RunInitAndWorkspace(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, version *version.Version) ([]string, error)
 }
 
 type Client struct {
@@ -74,7 +74,7 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 	// this is to support scripts to use the ENVIRONMENT, ATLANTIS_TERRAFORM_VERSION
 	// and WORKSPACE variables in their scripts
 	// append current process's environment variables
-	// this is to prevent the $PATH variable being removed from the environment
+	// this is to prevent the $PATH variable being removed from the environment.
 	envVars := []string{
 		fmt.Sprintf("ENVIRONMENT=%s", env),
 		fmt.Sprintf("ATLANTIS_TERRAFORM_VERSION=%s", v.String()),
@@ -99,25 +99,36 @@ func (c *Client) RunCommandWithVersion(log *logging.SimpleLogger, path string, a
 	return string(out), nil
 }
 
-// RunInitAndEnv executes "terraform init" and "terraform env select" in path.
-// env is the environment to select and extraInitArgs are additional arguments
-// applied to the init command.
-func (c *Client) RunInitAndEnv(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, version *version.Version) ([]string, error) {
+// RunInitAndWorkspace executes the following:
+// 1. "terraform init" - This initializes terraform project
+// 2. "terraform workspace or env select" - This selects the workspace or environment for the terraform project
+// [optional] 3. "terraform workspace or env new" - This creates a new workspace or environment for the terraform project
+// env is the environment supplied by the atlantis user that is used to
+// select or create a new workspace or environment for terraform.
+func (c *Client) RunInitAndWorkspace(log *logging.SimpleLogger, path string, env string, extraInitArgs []string, v *version.Version) ([]string, error) {
 	var outputs []string
 	// run terraform init
-	output, err := c.RunCommandWithVersion(log, path, append([]string{"init", "-no-color"}, extraInitArgs...), version, env)
+	output, err := c.RunCommandWithVersion(log, path, append([]string{"init", "-no-color"}, extraInitArgs...), v, env)
 	outputs = append(outputs, output)
 	if err != nil {
 		return outputs, err
 	}
 
-	// run terraform env new and select
-	output, err = c.RunCommandWithVersion(log, path, []string{"env", "select", "-no-color", env}, version, env)
+	// Terraform uses 'terraform env' command for versions > 0.8 and < 0.10.
+	// Versions >= 0.10 use 'terraform workspace'.
+	workspaceCmdName := "workspace"
+	constraints, _ := version.NewConstraint("< 0.10.0")
+	if constraints.Check(v) {
+		workspaceCmdName = "env"
+	}
+
+	output, err = c.RunCommandWithVersion(log, path, []string{workspaceCmdName, "select", "-no-color", env}, v, env)
 	outputs = append(outputs, output)
 	if err != nil {
-		// if terraform env select fails we will run terraform env new
-		// to create a new environment
-		output, err = c.RunCommandWithVersion(log, path, []string{"env", "new", "-no-color", env}, version, env)
+		// If 'terraform workspace/env select' fails we will run 'terraform workspace new'
+		// to create a new environment. This is done for ease of use so that the atlantis
+		// user doesn't have to create a new workspace/env manually.
+		output, err = c.RunCommandWithVersion(log, path, []string{workspaceCmdName, "new", "-no-color", env}, v, env)
 		outputs = append(outputs, output)
 		if err != nil {
 			return outputs, err
