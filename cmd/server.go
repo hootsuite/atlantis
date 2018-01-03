@@ -31,6 +31,8 @@ const (
 	LogLevelFlag        = "log-level"
 	PortFlag            = "port"
 	RequireApprovalFlag = "require-approval"
+	SSLCertFileFlag     = "ssl-cert-file"
+	SSLKeyFileFlag      = "ssl-key-file"
 )
 
 var stringFlags = []stringFlag{
@@ -93,6 +95,14 @@ var stringFlags = []stringFlag{
 		name:        LogLevelFlag,
 		description: "Log level. Either debug, info, warn, or error.",
 		value:       "info",
+	},
+	{
+		name:        SSLCertFileFlag,
+		description: "File containing x509 Certificate used for serving HTTPS. If the cert is signed by a CA, the file should be the concatenation of the server's certificate, any intermediates, and the CA's certificate.",
+	},
+	{
+		name:        SSLKeyFileFlag,
+		description: fmt.Sprintf("File containing x509 private key matching --%s.", SSLCertFileFlag),
 	},
 }
 var boolFlags = []boolFlag{
@@ -248,13 +258,17 @@ func (s *ServerCmd) validate(config server.Config) error {
 	if logLevel != "debug" && logLevel != "info" && logLevel != "warn" && logLevel != "error" {
 		return errors.New("invalid log level: not one of debug, info, warn, error")
 	}
-	vcsErr := fmt.Errorf("--%s/--%s or --%s/--%s must be set", GHUserFlag, GHTokenFlag, GitlabUserFlag, GitlabTokenFlag)
+
+	if (config.SSLKeyFile == "") != (config.SSLCertFile == "") {
+		return fmt.Errorf("%s and %s are required for ssl", SSLKeyFileFlag, SSLCertFileFlag)
+	}
 
 	// The following combinations are valid.
 	// 1. github user and token
 	// 2. gitlab user and token
 	// 3. all 4 set
 	// We validate using contradiction (I think).
+	vcsErr := fmt.Errorf("--%s/--%s or --%s/--%s must be set", GHUserFlag, GHTokenFlag, GitlabUserFlag, GitlabTokenFlag)
 	if config.GithubUser != "" && config.GithubToken == "" || config.GithubToken != "" && config.GithubUser == "" {
 		return vcsErr
 	}
