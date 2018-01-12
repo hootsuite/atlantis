@@ -105,7 +105,10 @@ func NewServer(config Config) (*Server, error) {
 		gitlabClient = &vcs.GitlabClient{
 			Client: gitlab.NewClient(nil, config.GitlabToken),
 		}
-		gitlabClient.Client.SetBaseURL(config.GitlabHostname)
+		err := gitlabClient.Client.SetBaseURL(config.GitlabHostname)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var webhooksConfig []webhooks.Config
 	for _, c := range config.Webhooks {
