@@ -103,7 +103,7 @@ func NewServer(config Config) (*Server, error) {
 	if config.GitlabUser != "" {
 		supportedVCSHosts = append(supportedVCSHosts, vcs.Gitlab)
 		gitlabClient = &vcs.GitlabClient{
-			Client: gitlab.NewClient(nil, config.GitlabToken),
+			Client: gitlab.NewClient(config.GitlabHostname, config.GitlabToken),
 		}
 	}
 	var webhooksConfig []webhooks.Config
