@@ -105,8 +105,13 @@ func NewServer(config Config) (*Server, error) {
 		gitlabClient = &vcs.GitlabClient{
 			Client: gitlab.NewClient(nil, config.GitlabToken),
 		}
-		err := gitlabClient.Client.SetBaseURL(config.GitlabHostname)
+		// Ensure the BaseURL has /api/v4/ appended. We only care about the Scheme
+		// and Host. GH-229
+		u, err := url.Parse(config.GitlabHostname)
 		if err != nil {
+			return nil, errors.Wrap(err, "parsing GitLab hostname")
+		}
+		if err := gitlabClient.Client.SetBaseURL(fmt.Sprintf("%s://%s/api/v4/", u.Scheme, u.Host)); err != nil {
 			return nil, err
 		}
 	}
