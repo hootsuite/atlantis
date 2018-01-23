@@ -260,23 +260,19 @@ func (s *ServerCmd) validate(config server.Config) error {
 	}
 
 	if (config.SSLKeyFile == "") != (config.SSLCertFile == "") {
-		return fmt.Errorf("%s and %s are required for ssl", SSLKeyFileFlag, SSLCertFileFlag)
+		return fmt.Errorf("--%s and --%s are both required for ssl", SSLKeyFileFlag, SSLCertFileFlag)
 	}
 
 	// The following combinations are valid.
-	// 1. github user and token
-	// 2. gitlab user and token
+	// 1. github user and token set
+	// 2. gitlab user and token set
 	// 3. all 4 set
-	// We validate using contradiction (I think).
 	vcsErr := fmt.Errorf("--%s/--%s or --%s/--%s must be set", GHUserFlag, GHTokenFlag, GitlabUserFlag, GitlabTokenFlag)
-	if config.GithubUser != "" && config.GithubToken == "" || config.GithubToken != "" && config.GithubUser == "" {
-		return vcsErr
-	}
-	if config.GitlabUser != "" && config.GitlabToken == "" || config.GitlabToken != "" && config.GitlabUser == "" {
+	if ((config.GithubUser == "") != (config.GithubToken == "")) || ((config.GitlabUser == "") != (config.GitlabToken == "")) {
 		return vcsErr
 	}
 	// At this point, we know that there can't be a single user/token without
-	// its pair, but we haven't checked if any user/token is set at all.
+	// its partner, but we haven't checked if any user/token is set at all.
 	if config.GithubUser == "" && config.GitlabUser == "" {
 		return vcsErr
 	}

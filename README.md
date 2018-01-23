@@ -481,7 +481,9 @@ However, if you were to lose the data, all you would need to do is run `atlantis
 
 **Q: How to add SSL to Atlantis server?**
 
-A: Pass the `--ssl` option to enable SSL for incoming connections.  You will need to get a trusted certificate and pass it into Atlantis server with the `--ssl-key-file` and `--ssl-cert-file` options.
+A: First, you'll need to get a public/private key pair to serve over SSL.
+These need to be in a directory accessible by Atlantis. Then start `atlantis server` with the `--ssl-cert-file` and `--ssl-key-file` flags.
+See `atlantis server --help` for more information.
 
 
 ## Contributing
