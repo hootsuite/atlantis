@@ -104,4 +104,3 @@ func (d *DefaultSlackClient) createAttachments(applyResult ApplyResult) []slack.
 	}
 	return []slack.Attachment{attachment}
 }
-
