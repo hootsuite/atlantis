@@ -68,6 +68,7 @@ func (d *DefaultSlackClient) ChannelExists(channelName string) (bool, error) {
 func (d *DefaultSlackClient) PostMessage(channel string, applyResult ApplyResult) error {
 	params := slack.NewPostMessageParameters()
 	params.Attachments = d.createAttachments(applyResult)
+        params.AsUser = true
 	params.EscapeText = false
 	_, _, err := d.Slack.PostMessage(channel, "", params)
 	return err
@@ -103,3 +104,4 @@ func (d *DefaultSlackClient) createAttachments(applyResult ApplyResult) []slack.
 	}
 	return []slack.Attachment{attachment}
 }
+
