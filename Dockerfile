@@ -2,6 +2,7 @@ FROM alpine:3.6
 LABEL authors="Anubhav Mishra, Luke Kysow"
 LABEL maintainer="anubhav.mishra@hootsuite.com,luke.kysow@hootsuite.com" 
 
+RUN apk -U upgrade
 # create atlantis user
 RUN addgroup atlantis && \
     adduser -S -G atlantis atlantis
